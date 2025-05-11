@@ -1,0 +1,112 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 15% 10%; /* Dark Slate Blue/Gray */
+    --foreground: 210 40% 95%; /* Light Gray/Off-white */
+
+    --card: 220 15% 15%; /* Slightly Lighter Dark Slate */
+    --card-foreground: 210 40% 95%;
+
+    --popover: 220 15% 12%; /* Darker for popovers */
+    --popover-foreground: 210 40% 95%;
+
+    --primary: 205 70% 50%; /* Sky Blue */
+    --primary-foreground: 210 40% 98%; /* White for high contrast on primary */
+
+    --secondary: 220 10% 30%; /* Muted Slate */
+    --secondary-foreground: 210 40% 90%;
+
+    --muted: 220 10% 25%; /* Darker Muted Slate */
+    --muted-foreground: 215 20% 65%; /* Lighter Gray for muted text */
+
+    --accent: 200 80% 60%; /* Bright Cyan/Blue */
+    --accent-foreground: 220 15% 10%; /* Dark for contrast on accent */
+
+    --destructive: 0 70% 55%; /* Vibrant Red */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 15% 25%; /* Slate Border */
+    --input: 220 15% 22%; /* Darker Input Background */
+    --ring: 205 70% 60%; /* Sky Blue for focus rings */
+
+    --radius: 0.5rem;
+  }
+
+  /* No .dark class needed if dark is default, but can be kept for future light mode toggle */
+  .dark {
+    /* These would be light mode variables if .dark was a toggle */
+    /* For now, they are the same as :root */
+    --background: 220 15% 10%;
+    --foreground: 210 40% 95%;
+    --card: 220 15% 15%;
+    --card-foreground: 210 40% 95%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 210 40% 95%;
+    --primary: 205 70% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 10% 30%;
+    --secondary-foreground: 210 40% 90%;
+    --muted: 220 10% 25%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 200 80% 60%;
+    --accent-foreground: 220 15% 10%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 15% 25%;
+    --input: 220 15% 22%;
+    --ring: 205 70% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  /* Custom scrollbar for webkit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-700/50;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-sky-500/70;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-sky-500;
+  }
+}
+
+/* Custom animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px); /* Reduced float height */
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Additional global styles for Inventory Management System */
+h1, h2, h3, h4, h5, h6 {
+  @apply text-gray-100;
+}
+  
