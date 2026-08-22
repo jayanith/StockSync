@@ -1,4 +1,4 @@
-# 🏛️ Enterprise Luxury Inventory & Supply Chain Governance System
+# 🏛️ StockSync – Enterprise Luxury Inventory & Supply Chain Governance System
 
 A full-stack enterprise inventory management platform engineered with **Java 17 Spring Boot**, **MySQL**, **Spring Security (JWT)**, and **React 18 (Vite + Tailwind CSS)** styled with a classic, human-crafted **Old Money aesthetic**.
 
