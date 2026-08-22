@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,8 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { FilePlus, ArrowLeft, Users2, Package, PlusCircle, Trash2, DollarSign, CalendarDays } from 'lucide-react';
+import { FilePlus, ArrowLeft, Users2, Package, PlusCircle, Trash2, DollarSign } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { getSuppliers, getProducts, createPurchaseOrder } from '@/lib/api';
 
 const CreatePurchaseOrderPage = () => {
   const navigate = useNavigate();
@@ -21,13 +21,35 @@ const CreatePurchaseOrderPage = () => {
   const [availableSuppliers, setAvailableSuppliers] = useState([]);
   const [availableProducts, setAvailableProducts] = useState([]);
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const storedSuppliers = JSON.parse(localStorage.getItem('inventorySuppliers')) || [];
-    setAvailableSuppliers(storedSuppliers);
-    const storedProducts = JSON.parse(localStorage.getItem('inventoryProducts')) || [];
-    // For POs, we might want all products, not just those from a specific supplier initially
-    setAvailableProducts(storedProducts.map(p => ({ id: p.id, name: p.name, cost: p.cost || p.price * 0.7, stock: p.quantity }))); // Assuming cost if not present
+    const loadDependencies = async () => {
+      try {
+        const [supRes, prodRes] = await Promise.allSettled([
+          getSuppliers(),
+          getProducts()
+        ]);
+
+        if (supRes.status === 'fulfilled' && supRes.value?.data) {
+          setAvailableSuppliers(supRes.value.data.map(s => ({
+            id: String(s.id || s._id),
+            name: s.name
+          })));
+        }
+
+        if (prodRes.status === 'fulfilled' && prodRes.value?.data) {
+          setAvailableProducts(prodRes.value.data.map(p => ({
+            id: String(p.id || p._id),
+            name: p.name,
+            cost: p.cost || (Number(p.price || 0) * 0.65)
+          })));
+        }
+      } catch (e) {
+        console.error('Error loading PO dependencies:', e);
+      }
+    };
+    loadDependencies();
   }, []);
 
   const handleItemChange = (index, field, value) => {
@@ -36,11 +58,12 @@ const CreatePurchaseOrderPage = () => {
 
     if (field === 'productId') {
       const product = availableProducts.find(p => p.id === value);
-      newItems[index].unitCost = product ? product.cost : 0;
+      newItems[index].unitCost = product ? Number(product.cost).toFixed(2) : 0;
     }
     
-    if (field === 'quantity' && parseInt(value) < 1) {
-      newItems[index].quantity = 1;
+    if (field === 'quantity') {
+      const parsed = parseInt(value) || 1;
+      newItems[index].quantity = parsed < 1 ? 1 : parsed;
     }
     setItems(newItems);
   };
@@ -50,170 +73,232 @@ const CreatePurchaseOrderPage = () => {
   };
 
   const removeItem = (index) => {
-    const newItems = items.filter((_, i) => i !== index);
-    setItems(newItems);
+    if (items.length === 1) {
+      toast({ title: "Notice", description: "A purchase order must include at least one item." });
+      return;
+    }
+    setItems(items.filter((_, i) => i !== index));
   };
 
   const calculateSubtotal = (item) => {
-    return item.quantity * item.unitCost;
+    return (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
   };
 
   const calculateTotal = () => {
     return items.reduce((sum, item) => sum + calculateSubtotal(item), 0);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!supplierId || !poDate || items.some(item => !item.productId)) {
-      toast({ title: "Validation Error", description: "Please select a supplier, PO date, and ensure all items have a product selected.", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Please select a supplier, PO date, and ensure items are selected.", variant: "destructive" });
       return;
     }
 
-    const newPO = {
-      id: `PO-${Date.now().toString().slice(-6)}`,
-      supplierId,
-      supplierName: availableSuppliers.find(s => s.id === supplierId)?.name || 'Unknown Supplier',
+    setIsSubmitting(true);
+
+    const supObj = availableSuppliers.find(s => s.id === supplierId);
+
+    const poPayload = {
+      supplierId: supplierId,
+      supplierName: supObj?.name || 'Selected Merchant',
       date: poDate,
-      expectedDeliveryDate,
-      items: items.map(item => ({
-        ...item,
-        productName: availableProducts.find(p => p.id === item.productId)?.name || 'Unknown Product'
-      })),
+      expectedDeliveryDate: expectedDeliveryDate || undefined,
+      notes: notes.trim() || undefined,
+      status: 'Approved',
       total: calculateTotal(),
-      status: 'Draft', // Default status
-      notes,
-      itemsCount: items.length,
+      items: items.map(item => ({
+        productId: item.productId,
+        productName: availableProducts.find(p => p.id === item.productId)?.name || 'Restock Product',
+        quantity: parseInt(item.quantity),
+        unitCost: parseFloat(item.unitCost)
+      }))
     };
 
-    const existingPOs = JSON.parse(localStorage.getItem('inventoryPurchaseOrders')) || [];
-    localStorage.setItem('inventoryPurchaseOrders', JSON.stringify([...existingPOs, newPO]));
-
-    toast({ title: "Purchase Order Created", description: `PO ${newPO.id} has been successfully created as a draft.` });
-    navigate('/purchase-orders');
+    try {
+      await createPurchaseOrder(poPayload);
+      toast({ title: "Purchase Order Created", description: "Purchase contract saved to MySQL." });
+      navigate('/purchase-orders');
+    } catch (error) {
+      console.error('Error creating purchase order:', error);
+      toast({ title: "Error", description: error.message || "Failed to save purchase order.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-6xl mx-auto space-y-6"
     >
-      <Button variant="outline" onClick={() => navigate('/purchase-orders')} className="mb-6 text-sky-400 border-sky-500 hover:bg-sky-500/10">
+      <Button 
+        variant="outline" 
+        onClick={() => navigate('/purchase-orders')} 
+        className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f8f6f0]"
+      >
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Purchase Orders
       </Button>
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-                  <FilePlus className="mr-3 h-7 w-7" /> Create New Purchase Order
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+              <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+                <CardTitle className="text-xl font-serif text-[#f8f6f0] flex items-center">
+                  <FilePlus className="mr-3 h-5 w-5 text-[#c5a059]" /> Create Acquisition Contract
                 </CardTitle>
-                <CardDescription className="text-gray-400">Fill in supplier and PO details.</CardDescription>
+                <CardDescription className="text-xs text-[#9ea8a1]">Supplier details and fulfillment timeframe</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-6 space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="supplierId" className="text-gray-300">Supplier*</Label>
-                    <Select value={supplierId} onValueChange={setSupplierId}>
-                      <SelectTrigger id="supplierId" className="w-full bg-slate-700 border-slate-600 text-white">
-                        <SelectValue placeholder="Select supplier" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                        {availableSuppliers.map(s => (
-                          <SelectItem key={s.id} value={s.id} className="hover:bg-sky-700/50 focus:bg-sky-600">{s.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="poDate" className="text-gray-300">PO Date*</Label>
-                    <Input id="poDate" type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="bg-slate-700 border-slate-600" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="expectedDeliveryDate" className="text-gray-300">Expected Delivery Date</Label>
-                  <Input id="expectedDeliveryDate" type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} className="bg-slate-700 border-slate-600" />
-                </div>
-                <div>
-                  <Label htmlFor="notes" className="text-gray-300">Notes (Optional)</Label>
-                  <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g., Payment terms, specific instructions" className="bg-slate-700 border-slate-600 min-h-[80px]" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-sky-400 flex items-center"><Package className="mr-2 h-6 w-6" /> PO Items</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {items.map((item, index) => (
-                  <motion.div 
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border border-slate-700 rounded-md"
-                  >
-                    <div>
-                      <Label htmlFor={`product-${index}`} className="text-xs text-gray-400">Product*</Label>
-                      <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
-                        <SelectTrigger id={`product-${index}`} className="w-full bg-slate-700 border-slate-600 text-white">
-                          <SelectValue placeholder="Select product" />
+                    <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Supplier / Merchant *</Label>
+                    <div className="mt-1.5">
+                      <Select value={supplierId} onValueChange={setSupplierId}>
+                        <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                          <SelectValue placeholder="Select vendor guild" />
                         </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                          {availableProducts.map(p => (
-                            <SelectItem key={p.id} value={p.id} className="hover:bg-sky-700/50 focus:bg-sky-600">{p.name}</SelectItem>
+                        <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                          {availableSuppliers.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">PO Issue Date *</Label>
+                    <Input 
+                      type="date" 
+                      value={poDate} 
+                      onChange={(e) => setPoDate(e.target.value)} 
+                      className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11" 
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Expected Delivery Date</Label>
+                  <Input 
+                    type="date" 
+                    value={expectedDeliveryDate} 
+                    onChange={(e) => setExpectedDeliveryDate(e.target.value)} 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11" 
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Acquisition Notes & Terms</Label>
+                  <Textarea 
+                    value={notes} 
+                    onChange={(e) => setNotes(e.target.value)} 
+                    placeholder="e.g. Standard wholesale terms, freight insured..." 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] min-h-[70px]" 
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+              <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+                <CardTitle className="text-lg font-serif text-[#f8f6f0] flex items-center">
+                  <Package className="mr-2 h-5 w-5 text-[#c5a059]" /> Restock Inventory Lines
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                {items.map((item, index) => (
+                  <div 
+                    key={index}
+                    className="grid grid-cols-1 md:grid-cols-[3fr_1fr_1.5fr_auto] gap-3 items-end p-3.5 bg-[#111a14] border border-[#26372c] rounded-lg"
+                  >
                     <div>
-                      <Label htmlFor={`quantity-${index}`} className="text-xs text-gray-400">Quantity*</Label>
-                      <Input id={`quantity-${index}`} type="number" min="1" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))} className="bg-slate-700 border-slate-600" />
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Catalog Product *</Label>
+                      <div className="mt-1">
+                        <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val)}>
+                          <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-10">
+                            <SelectValue placeholder="Select product" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                            {availableProducts.map(p => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-400">Unit Cost</Label>
-                      <Input type="number" step="0.01" value={item.unitCost} onChange={(e) => handleItemChange(index, 'unitCost', parseFloat(e.target.value))} className="bg-slate-700 border-slate-600" placeholder="0.00"/>
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Units</Label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={item.quantity} 
+                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
+                        className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-10" 
+                      />
                     </div>
-                    <Button type="button" variant="destructive" size="icon" onClick={() => removeItem(index)} className="h-10 w-10 bg-red-600/80 hover:bg-red-600">
+                    <div>
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Unit Cost ($)</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        value={item.unitCost} 
+                        onChange={(e) => handleItemChange(index, 'unitCost', e.target.value)} 
+                        className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-10 font-serif text-[#c5a059]" 
+                      />
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeItem(index)} 
+                      className="h-10 w-10 text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </motion.div>
+                  </div>
                 ))}
-                <Button type="button" variant="outline" onClick={addItem} className="w-full text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={addItem} 
+                  className="w-full text-[#c5a059] border-[#2e4034] hover:bg-[#19271f] hover:text-[#f8f6f0] mt-2 text-xs uppercase tracking-wider py-2"
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item Line
                 </Button>
               </CardContent>
             </Card>
           </div>
 
           <div className="lg:col-span-1">
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl sticky top-20">
-              <CardHeader>
-                <CardTitle className="text-xl text-sky-400">PO Summary</CardTitle>
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl sticky top-20">
+              <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+                <CardTitle className="text-lg font-serif text-[#f8f6f0]">Contract Valuation</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-5 space-y-3">
                 {items.map((item, index) => {
                   const product = availableProducts.find(p => p.id === item.productId);
                   if (!product) return null;
                   return (
-                    <div key={index} className="flex justify-between text-sm text-gray-300">
-                      <span>{product.name} x {item.quantity}</span>
-                      <span>${calculateSubtotal(item).toFixed(2)}</span>
+                    <div key={index} className="flex justify-between text-xs text-[#d8d3c5]">
+                      <span className="truncate max-w-[170px]">{product.name} × {item.quantity}</span>
+                      <span className="font-serif text-[#c5a059]">${calculateSubtotal(item).toFixed(2)}</span>
                     </div>
                   );
                 })}
-                <hr className="border-slate-700" />
-                <div className="flex justify-between text-lg font-semibold text-white">
-                  <span>Total</span>
-                  <span>${calculateTotal().toFixed(2)}</span>
+                <hr className="border-[#25352c] my-2" />
+                <div className="flex justify-between text-sm font-serif font-bold text-[#f8f6f0]">
+                  <span>Total Capital Outlay</span>
+                  <span className="text-[#c5a059] text-base">${calculateTotal().toFixed(2)}</span>
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md text-base py-3">
-                  <DollarSign className="mr-2 h-5 w-5" /> Create Purchase Order
+              <CardFooter className="p-5 pt-0">
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="w-full old-money-gold-btn text-xs uppercase tracking-wider py-3 shadow-lg"
+                >
+                  <DollarSign className="mr-1.5 h-4 w-4" /> {isSubmitting ? 'Issuing PO...' : 'Issue Purchase Order'}
                 </Button>
               </CardFooter>
             </Card>
@@ -225,4 +310,3 @@ const CreatePurchaseOrderPage = () => {
 };
 
 export default CreatePurchaseOrderPage;
-  

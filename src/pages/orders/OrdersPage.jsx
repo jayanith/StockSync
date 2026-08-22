@@ -1,175 +1,189 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { motion } from 'framer-motion';
-import { ShoppingCart, PlusCircle, Eye, Filter, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingCart, PlusCircle, Search, Filter, Eye, DollarSign, Calendar, User, FileText } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getOrders } from '@/lib/api';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const { toast } = useToast();
 
-  const mockOrders = [
-    { id: 'ORD-001', customerName: 'Alice Wonderland', date: '2025-05-01', total: 150.75, status: 'Pending', items: 3 },
-    { id: 'ORD-002', customerName: 'Bob The Builder', date: '2025-05-03', total: 89.99, status: 'Approved', items: 2 },
-    { id: 'ORD-003', customerName: 'Charlie Brown', date: '2025-05-05', total: 230.00, status: 'Delivered', items: 5 },
-    { id: 'ORD-004', customerName: 'Diana Prince', date: '2025-05-06', total: 45.50, status: 'Cancelled', items: 1 },
-    { id: 'ORD-005', customerName: 'Edward Scissorhands', date: '2025-05-08', total: 500.20, status: 'Pending', items: 8 },
-  ];
-  
-  const orderStatuses = ["Pending", "Approved", "Shipped", "Delivered", "Cancelled"];
+  const fetchOrders = async () => {
+    setIsLoading(true);
+    try {
+      const response = await getOrders();
+      if (response && response.data) {
+        setOrders(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load client orders from MySQL.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setIsLoading(true);
-    const storedOrders = JSON.parse(localStorage.getItem('inventoryOrders')) || mockOrders;
-    setOrders(storedOrders);
-    setIsLoading(false);
-    if (!localStorage.getItem('inventoryOrders')) {
-        localStorage.setItem('inventoryOrders', JSON.stringify(mockOrders));
-    }
+    fetchOrders();
   }, []);
 
-  const getStatusColor = (status) => {
+  const getStatusBadge = (status) => {
     switch (status) {
-      case 'Pending': return 'text-yellow-400 bg-yellow-600/20';
-      case 'Approved': return 'text-blue-400 bg-blue-600/20';
-      case 'Shipped': return 'text-purple-400 bg-purple-600/20';
-      case 'Delivered': return 'text-green-400 bg-green-600/20';
-      case 'Cancelled': return 'text-red-400 bg-red-600/20';
-      default: return 'text-gray-400 bg-gray-600/20';
+      case 'Delivered':
+        return 'bg-[#173022] text-[#6ee7b7] border-[#225039]';
+      case 'Processing':
+      case 'Shipped':
+        return 'bg-[#182833] text-[#7dd3fc] border-[#224458]';
+      case 'Pending':
+        return 'bg-[#332612] text-[#fde047] border-[#55401e]';
+      case 'Cancelled':
+        return 'bg-[#331b1b] text-[#fca5a5] border-[#522525]';
+      default:
+        return 'bg-[#253028] text-[#d1d5db] border-[#37473c]';
     }
   };
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearchTerm = order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    return matchesSearchTerm && matchesStatus;
+    const cust = order.customerName || '';
+    const oid = String(order.id || order._id || '');
+    const matchesSearch = cust.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          oid.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || order.status?.toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
   });
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><ShoppingCart className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="space-y-6 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <ShoppingCart className="mr-3 h-8 w-8" /> Customer Orders
-        </h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6 old-money-card border-[#2e4034] rounded-xl shadow-xl">
+        <div>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Requisitions</span>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#f8f6f0] mt-1 flex items-center">
+            <ShoppingCart className="mr-3 h-7 w-7 text-[#c5a059]" /> Client Orders
+          </h1>
+          <p className="text-xs text-[#9ea8a1] mt-0.5">Manage customer transactions & order fulfillment</p>
+        </div>
         <Link to="/orders/new">
-          <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-            <PlusCircle className="mr-2 h-5 w-5" /> Create New Order
+          <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4 shadow-lg">
+            <PlusCircle className="mr-2 h-4 w-4" /> Create New Order
           </Button>
         </Link>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Filter & Search Orders</CardTitle>
-          <div className="flex flex-col md:flex-row gap-4 pt-4">
+      <Card className="old-money-card border-[#2e4034] rounded-xl">
+        <CardHeader className="p-5">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
               <Input 
                 type="text"
-                placeholder="Search by Order ID or Customer Name..."
+                placeholder="Search orders by customer or reference ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
+                className="pl-10 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[200px] bg-slate-700 border-slate-600 text-white focus:ring-sky-500">
-                <Filter className="mr-2 h-4 w-4 text-gray-400" />
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                <SelectItem value="all" className="hover:bg-sky-700/50 focus:bg-sky-600">All Statuses</SelectItem>
-                {orderStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="hover:bg-sky-700/50 focus:bg-sky-600">{status}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full md:w-60">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                  <Filter className="mr-2 h-3.5 w-3.5 text-[#c5a059]" />
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
       </Card>
 
-      {filteredOrders.length > 0 ? (
-        <div className="overflow-x-auto bg-slate-800/70 border border-slate-700 rounded-lg shadow-md">
-          <table className="w-full text-sm text-left text-gray-300">
-            <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
-              <tr>
-                <th scope="col" className="px-6 py-3">Order ID</th>
-                <th scope="col" className="px-6 py-3">Customer</th>
-                <th scope="col" className="px-6 py-3">Date</th>
-                <th scope="col" className="px-6 py-3">Items</th>
-                <th scope="col" className="px-6 py-3 text-right">Total</th>
-                <th scope="col" className="px-6 py-3 text-center">Status</th>
-                <th scope="col" className="px-6 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order, index) => (
-                <motion.tr
-                  key={order.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="border-b border-slate-700 hover:bg-slate-700/30"
-                >
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{order.id}</td>
-                  <td className="px-6 py-4">{order.customerName}</td>
-                  <td className="px-6 py-4">{order.date}</td>
-                  <td className="px-6 py-4 text-center">{order.items}</td>
-                  <td className="px-6 py-4 text-right">${order.total.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <Link to={`/orders/${order.id}`}>
-                      <Button variant="ghost" size="sm" className="text-sky-400 hover:text-sky-300 hover:bg-sky-900/30">
-                        <Eye className="mr-1 h-4 w-4" /> View
-                      </Button>
-                    </Link>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <ShoppingCart className="h-10 w-10 animate-spin text-[#c5a059]" />
         </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-        >
-          <ShoppingCart className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-          <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Orders Found</h2>
-          <p className="text-gray-400 mb-6">
-            {searchTerm || statusFilter !== 'all' ? 'No orders match your current filters.' : 'There are no orders to display.'}
-          </p>
-          <Link to="/orders/new">
-            <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg">
-              <PlusCircle className="mr-2 h-5 w-5" /> Create First Order
-            </Button>
-          </Link>
-        </motion.div>
+        <Card className="old-money-card border-[#2e4034] rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-[#d8d3c5]">
+              <thead className="text-[11px] uppercase tracking-wider text-[#9ea8a1] bg-[#121b16] border-b border-[#202f25]">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Order Ref</th>
+                  <th className="px-6 py-4 font-semibold">Client Name</th>
+                  <th className="px-6 py-4 font-semibold">Items</th>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 text-right font-semibold">Valuation</th>
+                  <th className="px-6 py-4 text-center font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1b2820]">
+                {filteredOrders.length > 0 ? (
+                  filteredOrders.map((order, idx) => {
+                    const oid = order.id || order._id || `ORD-${idx + 1}`;
+                    const itemCount = order.items ? order.items.length : 0;
+                    return (
+                      <tr key={oid} className="hover:bg-[#16211a]/70 transition-colors">
+                        <td className="px-6 py-4 font-medium text-[#f8f6f0]">#{oid}</td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-[#e5dec9]">{order.customerName}</div>
+                          <div className="text-[10px] text-[#718277]">{order.customerEmail}</div>
+                        </td>
+                        <td className="px-6 py-4">{itemCount} items</td>
+                        <td className="px-6 py-4 text-[#9ea8a1]">{order.date || 'Today'}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadge(order.status)}`}>
+                            {order.status || 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right font-serif text-[#c5a059] font-semibold text-sm">
+                          ${Number(order.total || 0).toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Link to={`/orders/${oid}`}>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs text-[#c5a059] hover:bg-[#1f2e25] hover:text-[#f8f6f0]">
+                              <Eye className="h-3.5 w-3.5 mr-1" /> View
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="text-center py-12 text-[#9ea8a1]">
+                      No orders found in database.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </motion.div>
   );
 };
 
 export default OrdersPage;
-  

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,8 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { ShoppingCart, ArrowLeft, User, Package, PlusCircle, Trash2, DollarSign } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Package, PlusCircle, Trash2, DollarSign } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { getProducts, createOrder } from '@/lib/api';
 
 const CreateOrderPage = () => {
   const navigate = useNavigate();
@@ -20,10 +20,25 @@ const CreateOrderPage = () => {
   const [items, setItems] = useState([{ productId: '', quantity: 1, unitPrice: 0 }]);
   const [availableProducts, setAvailableProducts] = useState([]);
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const storedProducts = JSON.parse(localStorage.getItem('inventoryProducts')) || [];
-    setAvailableProducts(storedProducts.map(p => ({ id: p.id, name: p.name, price: p.price, stock: p.quantity })));
+    const fetchProds = async () => {
+      try {
+        const response = await getProducts();
+        if (response && response.data) {
+          setAvailableProducts(response.data.map(p => ({
+            id: String(p.id || p._id),
+            name: p.name,
+            price: p.price,
+            stock: p.quantity
+          })));
+        }
+      } catch (e) {
+        console.error('Error fetching products:', e);
+      }
+    };
+    fetchProds();
   }, []);
 
   const handleItemChange = (index, field, value) => {
@@ -33,20 +48,11 @@ const CreateOrderPage = () => {
     if (field === 'productId') {
       const product = availableProducts.find(p => p.id === value);
       newItems[index].unitPrice = product ? product.price : 0;
-      if (product && newItems[index].quantity > product.stock) {
-        newItems[index].quantity = product.stock; // Cap quantity at available stock
-        toast({ title: "Stock Alert", description: `Quantity for ${product.name} capped at available stock: ${product.stock}`, variant: "destructive", duration: 2000 });
-      }
     }
     
     if (field === 'quantity') {
-      const product = availableProducts.find(p => p.id === newItems[index].productId);
-      if (product && parseInt(value) > product.stock) {
-        newItems[index].quantity = product.stock; // Cap quantity
-        toast({ title: "Stock Alert", description: `Quantity for ${product.name} capped at available stock: ${product.stock}`, variant: "destructive", duration: 2000 });
-      } else if (parseInt(value) < 1) {
-        newItems[index].quantity = 1; // Minimum quantity is 1
-      }
+      const parsed = parseInt(value) || 1;
+      newItems[index].quantity = parsed < 1 ? 1 : parsed;
     }
     setItems(newItems);
   };
@@ -56,185 +62,226 @@ const CreateOrderPage = () => {
   };
 
   const removeItem = (index) => {
-    const newItems = items.filter((_, i) => i !== index);
-    setItems(newItems);
+    if (items.length === 1) {
+      toast({ title: "Notice", description: "An order must contain at least one item." });
+      return;
+    }
+    setItems(items.filter((_, i) => i !== index));
   };
 
   const calculateSubtotal = (item) => {
-    return item.quantity * item.unitPrice;
+    return (item.quantity || 0) * (item.unitPrice || 0);
   };
 
   const calculateTotal = () => {
     return items.reduce((sum, item) => sum + calculateSubtotal(item), 0);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!customerName.trim() || !customerEmail.trim() || !shippingAddress.trim() || items.some(item => !item.productId)) {
-      toast({ title: "Validation Error", description: "Please fill all required fields and select products for all items.", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Please complete customer details and select products for all lines.", variant: "destructive" });
       return;
     }
 
-    const newOrder = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
-      customerName,
-      customerEmail,
-      shippingAddress,
-      items: items.map(item => ({
-        ...item,
-        productName: availableProducts.find(p => p.id === item.productId)?.name || 'Unknown Product'
-      })),
+    setIsSubmitting(true);
+
+    const orderPayload = {
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim(),
+      shippingAddress: shippingAddress.trim(),
+      notes: notes.trim() || undefined,
+      status: 'Pending',
       total: calculateTotal(),
-      date: new Date().toISOString().split('T')[0],
-      status: 'Pending', // Default status
-      notes,
+      items: items.map(item => ({
+        productId: item.productId,
+        productName: availableProducts.find(p => p.id === item.productId)?.name || 'Selected Item',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice
+      }))
     };
 
-    // Update stock levels
-    const updatedProducts = [...availableProducts];
-    let stockError = false;
-    newOrder.items.forEach(orderItem => {
-      const productIndex = updatedProducts.findIndex(p => p.id === orderItem.productId);
-      if (productIndex !== -1) {
-        if (updatedProducts[productIndex].stock >= orderItem.quantity) {
-          updatedProducts[productIndex].stock -= orderItem.quantity;
-        } else {
-          stockError = true;
-          toast({ title: "Stock Error", description: `Not enough stock for ${updatedProducts[productIndex].name}. Order not placed.`, variant: "destructive" });
-        }
-      }
-    });
-
-    if (stockError) {
-      return; // Stop if there was a stock issue
+    try {
+      await createOrder(orderPayload);
+      toast({ title: "Order Created", description: "Client order has been logged into MySQL." });
+      navigate('/orders');
+    } catch (error) {
+      console.error('Error creating order:', error);
+      toast({
+        title: "Order Failed",
+        description: error.message || "Failed to save order to database.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    localStorage.setItem('inventoryProducts', JSON.stringify(updatedProducts.map(p => ({...p, quantity: p.stock })))); // Save updated stock
-
-    const existingOrders = JSON.parse(localStorage.getItem('inventoryOrders')) || [];
-    localStorage.setItem('inventoryOrders', JSON.stringify([...existingOrders, newOrder]));
-
-    toast({ title: "Order Created", description: `Order ${newOrder.id} has been successfully created.` });
-    navigate('/orders');
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-6xl mx-auto space-y-6"
     >
-      <Button variant="outline" onClick={() => navigate('/orders')} className="mb-6 text-sky-400 border-sky-500 hover:bg-sky-500/10">
+      <Button 
+        variant="outline" 
+        onClick={() => navigate('/orders')} 
+        className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f4efe6]"
+      >
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
       </Button>
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Order Details & Customer Info */}
           <div className="lg:col-span-2 space-y-6">
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-                  <ShoppingCart className="mr-3 h-7 w-7" /> Create New Order
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+              <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+                <CardTitle className="text-xl font-serif text-[#f8f6f0] flex items-center">
+                  <ShoppingCart className="mr-3 h-5 w-5 text-[#c5a059]" /> Client Requisition
                 </CardTitle>
-                <CardDescription className="text-gray-400">Fill in customer and order details.</CardDescription>
+                <CardDescription className="text-xs text-[#9ea8a1]">Client information and destination details</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-6 space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="customerName" className="text-gray-300">Customer Name*</Label>
-                    <Input id="customerName" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="John Doe" className="bg-slate-700 border-slate-600" />
+                    <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Customer / Client Name *</Label>
+                    <Input 
+                      value={customerName} 
+                      onChange={(e) => setCustomerName(e.target.value)} 
+                      placeholder="e.g. Lord Alexander Sterling" 
+                      className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059]" 
+                    />
                   </div>
                   <div>
-                    <Label htmlFor="customerEmail" className="text-gray-300">Customer Email*</Label>
-                    <Input id="customerEmail" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="john.doe@example.com" className="bg-slate-700 border-slate-600" />
+                    <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Client Email *</Label>
+                    <Input 
+                      type="email" 
+                      value={customerEmail} 
+                      onChange={(e) => setCustomerEmail(e.target.value)} 
+                      placeholder="client@estates.co.uk" 
+                      className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059]" 
+                    />
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="shippingAddress" className="text-gray-300">Shipping Address*</Label>
-                  <Textarea id="shippingAddress" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} placeholder="123 Main St, Anytown, USA" className="bg-slate-700 border-slate-600 min-h-[80px]" />
+                  <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Shipping Address *</Label>
+                  <Textarea 
+                    value={shippingAddress} 
+                    onChange={(e) => setShippingAddress(e.target.value)} 
+                    placeholder="22 Berkeley Square, Mayfair, London W1J 6ES" 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] min-h-[70px]" 
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="notes" className="text-gray-300">Order Notes (Optional)</Label>
-                  <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g., Gift wrap, specific delivery instructions" className="bg-slate-700 border-slate-600 min-h-[80px]" />
+                  <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Order Notes & Instructions (Optional)</Label>
+                  <Textarea 
+                    value={notes} 
+                    onChange={(e) => setNotes(e.target.value)} 
+                    placeholder="Private courier required with signature upon delivery..." 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] min-h-[60px]" 
+                  />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-sky-400 flex items-center"><Package className="mr-2 h-6 w-6" /> Order Items</CardTitle>
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+              <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+                <CardTitle className="text-lg font-serif text-[#f8f6f0] flex items-center">
+                  <Package className="mr-2 h-5 w-5 text-[#c5a059]" /> Line Items
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-6 space-y-3">
                 {items.map((item, index) => (
-                  <motion.div 
+                  <div 
                     key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border border-slate-700 rounded-md"
+                    className="grid grid-cols-1 md:grid-cols-[3fr_1fr_1.5fr_auto] gap-3 items-end p-3.5 bg-[#111a14] border border-[#26372c] rounded-lg"
                   >
                     <div>
-                      <Label htmlFor={`product-${index}`} className="text-xs text-gray-400">Product*</Label>
-                      <Select value={item.productId} onValueChange={(value) => handleItemChange(index, 'productId', value)}>
-                        <SelectTrigger id={`product-${index}`} className="w-full bg-slate-700 border-slate-600 text-white">
-                          <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                          {availableProducts.map(p => (
-                            <SelectItem key={p.id} value={p.id} disabled={p.stock === 0} className="hover:bg-sky-700/50 focus:bg-sky-600">
-                              {p.name} (Stock: {p.stock})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Product Item *</Label>
+                      <div className="mt-1">
+                        <Select value={item.productId} onValueChange={(val) => handleItemChange(index, 'productId', val)}>
+                          <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-10">
+                            <SelectValue placeholder="Select catalog item" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                            {availableProducts.map(p => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name} (${Number(p.price).toFixed(2)})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div>
-                      <Label htmlFor={`quantity-${index}`} className="text-xs text-gray-400">Quantity*</Label>
-                      <Input id={`quantity-${index}`} type="number" min="1" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))} className="bg-slate-700 border-slate-600" />
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Quantity</Label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={item.quantity} 
+                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
+                        className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-10" 
+                      />
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-400">Unit Price</Label>
-                      <p className="text-gray-200 p-2 rounded-md bg-slate-700/50 border border-slate-600">${item.unitPrice.toFixed(2)}</p>
+                      <Label className="text-[11px] uppercase tracking-wider text-[#9ea8a1]">Unit Price</Label>
+                      <p className="mt-1 px-3 py-2 rounded-md bg-[#141f18] border border-[#2c3d32] text-xs font-serif text-[#c5a059] font-medium h-10 flex items-center">
+                        ${Number(item.unitPrice || 0).toFixed(2)}
+                      </p>
                     </div>
-                    <Button type="button" variant="destructive" size="icon" onClick={() => removeItem(index)} className="h-10 w-10 bg-red-600/80 hover:bg-red-600">
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeItem(index)} 
+                      className="h-10 w-10 text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </motion.div>
+                  </div>
                 ))}
-                <Button type="button" variant="outline" onClick={addItem} className="w-full text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={addItem} 
+                  className="w-full text-[#c5a059] border-[#2e4034] hover:bg-[#19271f] hover:text-[#f8f6f0] mt-2 text-xs uppercase tracking-wider py-2"
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item Line
                 </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Order Summary */}
           <div className="lg:col-span-1">
-            <Card className="bg-slate-800/70 border-slate-700 shadow-xl sticky top-20">
-              <CardHeader>
-                <CardTitle className="text-xl text-sky-400">Order Summary</CardTitle>
+            <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl sticky top-20">
+              <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+                <CardTitle className="text-lg font-serif text-[#f8f6f0]">Order Summary</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="p-5 space-y-3">
                 {items.map((item, index) => {
                   const product = availableProducts.find(p => p.id === item.productId);
                   if (!product) return null;
                   return (
-                    <div key={index} className="flex justify-between text-sm text-gray-300">
-                      <span>{product.name} x {item.quantity}</span>
-                      <span>${calculateSubtotal(item).toFixed(2)}</span>
+                    <div key={index} className="flex justify-between text-xs text-[#d8d3c5]">
+                      <span className="truncate max-w-[170px]">{product.name} × {item.quantity}</span>
+                      <span className="font-serif text-[#c5a059]">${calculateSubtotal(item).toFixed(2)}</span>
                     </div>
                   );
                 })}
-                <hr className="border-slate-700" />
-                <div className="flex justify-between text-lg font-semibold text-white">
-                  <span>Total</span>
-                  <span>${calculateTotal().toFixed(2)}</span>
+                <hr className="border-[#25352c] my-2" />
+                <div className="flex justify-between text-sm font-serif font-bold text-[#f8f6f0]">
+                  <span>Total Valuation</span>
+                  <span className="text-[#c5a059] text-base">${calculateTotal().toFixed(2)}</span>
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md text-base py-3">
-                  <DollarSign className="mr-2 h-5 w-5" /> Place Order
+              <CardFooter className="p-5 pt-0">
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="w-full old-money-gold-btn text-xs uppercase tracking-wider py-3 shadow-lg"
+                >
+                  <DollarSign className="mr-1.5 h-4 w-4" /> {isSubmitting ? 'Placing Order...' : 'Submit Client Order'}
                 </Button>
               </CardFooter>
             </Card>
@@ -246,4 +293,3 @@ const CreateOrderPage = () => {
 };
 
 export default CreateOrderPage;
-  

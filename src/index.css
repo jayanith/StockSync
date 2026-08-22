@@ -1,64 +1,61 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 220 15% 10%; /* Dark Slate Blue/Gray */
-    --foreground: 210 40% 95%; /* Light Gray/Off-white */
+    /* Human-Crafted Classic Heritage Palette: Deep Slate Charcoal, British Racing Green undertones, Antique Gold, Warm Ivory */
+    --background: 155 14% 6%;       /* #0e1110 */
+    --foreground: 45 25% 94%;       /* #f4f1ea */
 
-    --card: 220 15% 15%; /* Slightly Lighter Dark Slate */
-    --card-foreground: 210 40% 95%;
+    --card: 155 12% 9%;            /* #131715 */
+    --card-foreground: 45 25% 94%;
 
-    --popover: 220 15% 12%; /* Darker for popovers */
-    --popover-foreground: 210 40% 95%;
+    --popover: 155 14% 8%;         /* #101412 */
+    --popover-foreground: 45 25% 94%;
 
-    --primary: 205 70% 50%; /* Sky Blue */
-    --primary-foreground: 210 40% 98%; /* White for high contrast on primary */
+    --primary: 42 48% 54%;         /* #c5a059 Antique Gold */
+    --primary-foreground: 155 15% 6%;
 
-    --secondary: 220 10% 30%; /* Muted Slate */
-    --secondary-foreground: 210 40% 90%;
+    --secondary: 155 12% 14%;      /* #1c221f */
+    --secondary-foreground: 45 20% 90%;
 
-    --muted: 220 10% 25%; /* Darker Muted Slate */
-    --muted-foreground: 215 20% 65%; /* Lighter Gray for muted text */
+    --muted: 155 10% 12%;          /* #171c1a */
+    --muted-foreground: 45 10% 62%;/* #9e9a8f Stone Linen */
 
-    --accent: 200 80% 60%; /* Bright Cyan/Blue */
-    --accent-foreground: 220 15% 10%; /* Dark for contrast on accent */
+    --accent: 42 50% 50%;          /* #bfa052 */
+    --accent-foreground: 155 15% 6%;
 
-    --destructive: 0 70% 55%; /* Vibrant Red */
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 45% 45%;      /* Deep Crimson #a83232 */
+    --destructive-foreground: 45 25% 98%;
 
-    --border: 220 15% 25%; /* Slate Border */
-    --input: 220 15% 22%; /* Darker Input Background */
-    --ring: 205 70% 60%; /* Sky Blue for focus rings */
+    --border: 155 10% 18%;         /* Solid Crisp Border #27302b */
+    --input: 155 12% 11%;          /* Inset #151a17 */
+    --ring: 42 48% 54%;
 
     --radius: 0.5rem;
   }
 
-  /* No .dark class needed if dark is default, but can be kept for future light mode toggle */
   .dark {
-    /* These would be light mode variables if .dark was a toggle */
-    /* For now, they are the same as :root */
-    --background: 220 15% 10%;
-    --foreground: 210 40% 95%;
-    --card: 220 15% 15%;
-    --card-foreground: 210 40% 95%;
-    --popover: 220 15% 12%;
-    --popover-foreground: 210 40% 95%;
-    --primary: 205 70% 50%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 220 10% 30%;
-    --secondary-foreground: 210 40% 90%;
-    --muted: 220 10% 25%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 200 80% 60%;
-    --accent-foreground: 220 15% 10%;
-    --destructive: 0 70% 55%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 15% 25%;
-    --input: 220 15% 22%;
-    --ring: 205 70% 60%;
+    --background: 155 14% 6%;
+    --foreground: 45 25% 94%;
+    --card: 155 12% 9%;
+    --card-foreground: 45 25% 94%;
+    --popover: 155 14% 8%;
+    --popover-foreground: 45 25% 94%;
+    --primary: 42 48% 54%;
+    --primary-foreground: 155 15% 6%;
+    --secondary: 155 12% 14%;
+    --secondary-foreground: 45 20% 90%;
+    --muted: 155 10% 12%;
+    --muted-foreground: 45 10% 62%;
+    --accent: 42 50% 50%;
+    --accent-foreground: 155 15% 6%;
+    --destructive: 0 45% 45%;
+    --destructive-foreground: 45 25% 98%;
+    --border: 155 10% 18%;
+    --input: 155 12% 11%;
+    --ring: 42 48% 54%;
   }
 }
 
@@ -68,45 +65,46 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: #0d110f;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
-  /* Custom scrollbar for webkit browsers */
+
+  /* Custom Clean Scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-slate-700/50;
-    border-radius: 10px;
+    background: #0e1210;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-sky-500/70;
-    border-radius: 10px;
+    background: #252e29;
+    border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-sky-500;
+    background: #c5a059;
   }
 }
 
-/* Custom animations */
-@keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-8px); /* Reduced float height */
-  }
-  100% {
-    transform: translateY(0px);
-  }
+/* Professional Old Money Card & Elements */
+.old-money-card {
+  background-color: #121714;
+  border: 1px solid #232b26;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
 }
 
-.animate-float {
-  animation: float 3s ease-in-out infinite;
+.old-money-gold-btn {
+  background: linear-gradient(180deg, #cbb06d 0%, #b39147 100%);
+  color: #0b0f0d;
+  font-weight: 600;
+  border: 1px solid #d4be80;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease-in-out;
 }
 
-/* Additional global styles for Inventory Management System */
-h1, h2, h3, h4, h5, h6 {
-  @apply text-gray-100;
+.old-money-gold-btn:hover {
+  background: linear-gradient(180deg, #d8be7c 0%, #c4a154 100%);
+  box-shadow: 0 4px 10px rgba(197, 160, 89, 0.25);
+  color: #000000;
 }
-  

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,29 +16,25 @@ const SignUpPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { register } = useAuth();
 
   const validate = () => {
     const newErrors = {};
-    if (!name) newErrors.name = "Full name is required.";
-    
+    if (!name.trim()) newErrors.name = "Full name is required.";
     if (!email) {
       newErrors.email = "Email is required.";
     } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = "Email address is invalid.";
     }
-
     if (!password) {
       newErrors.password = "Password is required.";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters long.";
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters.";
     }
-
-    if (!confirmPassword) {
-      newErrors.confirmPassword = "Confirm password is required.";
-    } else if (password && password !== confirmPassword) {
+    if (password !== confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match.";
     }
     return newErrors;
@@ -51,134 +46,136 @@ const SignUpPage = () => {
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
-       toast({
+      toast({
         title: "Validation Error",
-        description: "Please check the fields for errors.",
+        description: "Please check the registration fields.",
         variant: "destructive",
       });
       return;
     }
-    
+
+    setIsLoading(true);
+
     try {
-      // Register user with the AuthContext
-      const response = await register({ name, email, password });
-      
-      console.log('Registration response:', response); // Debug log
+      await register({ name, email, password });
       
       toast({
-        title: "Sign Up Successful",
-        description: "Your account has been created. Redirecting to dashboard...",
+        title: "Account Registered",
+        description: `Welcome, ${name}! Your account has been saved in MySQL database.`,
       });
       
-      // Navigate to dashboard instead of login since we're already logged in
-      setTimeout(() => navigate('/'), 1500);
+      setTimeout(() => {
+        navigate('/');
+      }, 500);
     } catch (error) {
-      console.error('Registration error:', error); // Debug log
+      console.error('Registration error:', error);
       toast({
         title: "Registration Failed",
-        description: error.message || "Could not create account. Please try again.",
+        description: error.message || "Failed to register account.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900 p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#0b110e] text-[#f6f3eb]">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.35 }}
         className="w-full max-w-md"
       >
-        <Card className="bg-slate-800/70 border-slate-700 shadow-2xl shadow-sky-500/20">
-          <CardHeader className="text-center">
-             <motion.div 
+        <Card className="old-money-card border-[#36493e] rounded-2xl shadow-2xl overflow-hidden">
+          <CardHeader className="text-center pb-4 pt-8 bg-[#0f1712]/70 border-b border-[#202f25]">
+            <motion.div 
               initial={{ scale: 0 }} 
               animate={{ scale: 1 }} 
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="mx-auto w-20 h-20 bg-gradient-to-br from-sky-500 to-blue-600 rounded-full flex items-center justify-center mb-4"
+              transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+              className="mx-auto w-16 h-16 bg-[#19271f] border border-[#c5a059]/50 rounded-2xl flex items-center justify-center mb-3 shadow-lg"
             >
-              <UserPlus className="h-10 w-10 text-white" />
+              <Package className="h-8 w-8 text-[#c5a059]" />
             </motion.div>
-            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">Create Account</CardTitle>
-            <CardDescription className="text-gray-400">Join InventoryPro today!</CardDescription>
+            <span className="text-[11px] uppercase tracking-widest text-[#c5a059] font-medium">New Account</span>
+            <CardTitle className="text-2xl font-serif font-bold text-[#f8f6f0] mt-0.5">Register Identity</CardTitle>
+            <CardDescription className="text-xs text-[#9ea8a1]">Create your system account stored securely in MySQL</CardDescription>
           </CardHeader>
-          <CardContent>
+          
+          <CardContent className="p-6 md:p-8 space-y-4">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="name" className={cn("text-gray-300 flex items-center", errors.name && "text-red-400")}>
-                  <User className={cn("mr-2 h-4 w-4 text-sky-400", errors.name && "text-red-400")} /> Full Name
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059] flex items-center", errors.name && "text-red-400")}>
+                  <User className="mr-1.5 h-3.5 w-3.5 text-[#c5a059]" /> Full Name
                 </Label>
                 <Input 
                   id="name" 
                   type="text" 
-                  placeholder="John Doe" 
+                  placeholder="e.g. Lord Alexander Sterling" 
                   value={name}
                   onChange={(e) => { setName(e.target.value); if(errors.name) setErrors({...errors, name: null}); }}
-                  className={cn("bg-slate-700 border-slate-600 focus:border-sky-500 text-white placeholder-gray-500", errors.name && "border-red-500 focus:border-red-500")}
-                  aria-invalid={errors.name ? "true" : "false"}
+                  className={cn("bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11", errors.name && "border-red-500")}
                 />
-                {errors.name && <p className="text-xs text-red-400 flex items-center mt-1"><AlertCircle className="h-3 w-3 mr-1" />{errors.name}</p>}
+                {errors.name && <p className="text-[11px] text-red-400 mt-1">{errors.name}</p>}
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="email" className={cn("text-gray-300 flex items-center", errors.email && "text-red-400")}>
-                  <Mail className={cn("mr-2 h-4 w-4 text-sky-400", errors.email && "text-red-400")} /> Email
+
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059] flex items-center", errors.email && "text-red-400")}>
+                  <Mail className="mr-1.5 h-3.5 w-3.5 text-[#c5a059]" /> Corporate Email
                 </Label>
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="you@example.com" 
+                  placeholder="name@example.com" 
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if(errors.email) setErrors({...errors, email: null}); }}
-                  className={cn("bg-slate-700 border-slate-600 focus:border-sky-500 text-white placeholder-gray-500", errors.email && "border-red-500 focus:border-red-500")}
-                  aria-invalid={errors.email ? "true" : "false"}
+                  className={cn("bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11", errors.email && "border-red-500")}
                 />
-                {errors.email && <p className="text-xs text-red-400 flex items-center mt-1"><AlertCircle className="h-3 w-3 mr-1" />{errors.email}</p>}
+                {errors.email && <p className="text-[11px] text-red-400 mt-1">{errors.email}</p>}
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="password" className={cn("text-gray-300 flex items-center", errors.password && "text-red-400")}>
-                  <Lock className={cn("mr-2 h-4 w-4 text-sky-400", errors.password && "text-red-400")} /> Password
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059] flex items-center", errors.password && "text-red-400")}>
+                  <Lock className="mr-1.5 h-3.5 w-3.5 text-[#c5a059]" /> Password
                 </Label>
                 <Input 
                   id="password" 
                   type="password" 
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 6 characters" 
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); if(errors.password) setErrors({...errors, password: null}); }}
-                  className={cn("bg-slate-700 border-slate-600 focus:border-sky-500 text-white placeholder-gray-500", errors.password && "border-red-500 focus:border-red-500")}
-                  aria-invalid={errors.password ? "true" : "false"}
+                  className={cn("bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11", errors.password && "border-red-500")}
                 />
-                {errors.password && <p className="text-xs text-red-400 flex items-center mt-1"><AlertCircle className="h-3 w-3 mr-1" />{errors.password}</p>}
+                {errors.password && <p className="text-[11px] text-red-400 mt-1">{errors.password}</p>}
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="confirmPassword" className={cn("text-gray-300 flex items-center", errors.confirmPassword && "text-red-400")}>
-                  <Lock className={cn("mr-2 h-4 w-4 text-sky-400", errors.confirmPassword && "text-red-400")} /> Confirm Password
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059] flex items-center", errors.confirmPassword && "text-red-400")}>
+                  <Lock className="mr-1.5 h-3.5 w-3.5 text-[#c5a059]" /> Confirm Password
                 </Label>
                 <Input 
                   id="confirmPassword" 
                   type="password" 
-                  placeholder="Re-enter your password"
+                  placeholder="Re-enter password" 
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); if(errors.confirmPassword) setErrors({...errors, confirmPassword: null}); }}
-                  className={cn("bg-slate-700 border-slate-600 focus:border-sky-500 text-white placeholder-gray-500", errors.confirmPassword && "border-red-500 focus:border-red-500")}
-                  aria-invalid={errors.confirmPassword ? "true" : "false"}
+                  className={cn("bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11", errors.confirmPassword && "border-red-500")}
                 />
-                {errors.confirmPassword && <p className="text-xs text-red-400 flex items-center mt-1"><AlertCircle className="h-3 w-3 mr-1" />{errors.confirmPassword}</p>}
+                {errors.confirmPassword && <p className="text-[11px] text-red-400 mt-1">{errors.confirmPassword}</p>}
               </div>
-              <Button type="submit" className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg hover:shadow-blue-500/50 transform hover:scale-105 transition-all duration-300 mt-6">
-                <UserPlus className="mr-2 h-5 w-5" /> Sign Up
+
+              <Button type="submit" disabled={isLoading} className="w-full old-money-gold-btn text-xs uppercase tracking-wider py-3 shadow-lg mt-2">
+                <UserPlus className="mr-2 h-4 w-4" /> {isLoading ? 'Creating Account...' : 'Create Account'}
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex flex-col items-center space-y-3">
-            <p className="text-sm text-gray-400">
-              Already have an account?{' '}
-              <Link to="/login" className="font-medium text-sky-400 hover:underline hover:text-sky-300">
-                Log in
+
+          <CardFooter className="flex flex-col items-center space-y-2 p-6 pt-0 border-t border-[#202f25] bg-[#0f1712]/50 text-xs">
+            <p className="text-[#9ea8a1] mt-3">
+              Already possess credentials?{' '}
+              <Link to="/login" className="font-medium text-[#c5a059] hover:underline">
+                Sign In
               </Link>
-            </p>
-             <p className="text-xs text-amber-400 text-center px-4">
-              Note: After signing up, you'll need to log in with your new credentials.
             </p>
           </CardFooter>
         </Card>
@@ -188,4 +185,3 @@ const SignUpPage = () => {
 };
 
 export default SignUpPage;
-  

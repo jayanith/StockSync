@@ -1,23 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Users2, PlusCircle, Edit, Trash2, Search, Filter, Mail, Phone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
+import { Users2, PlusCircle, Search, Mail, Phone, MapPin, Globe, Eye, Trash2 } from 'lucide-react';
+import { getSuppliers, deleteSupplier } from '@/lib/api';
 
 const SuppliersPage = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -25,151 +14,143 @@ const SuppliersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
-  const mockSuppliers = [
-    { id: 'sup1', name: 'TechSupply Co.', email: 'sales@techsupply.com', phone: '555-0101', contactPerson: 'John Doe', productsSupplied: 50 },
-    { id: 'sup2', name: 'EcoThreads Ltd.', email: 'info@ecothreads.com', phone: '555-0102', contactPerson: 'Jane Smith', productsSupplied: 120 },
-    { id: 'sup3', name: 'LearnWell Publishers', email: 'orders@learnwell.com', phone: '555-0103', contactPerson: 'Robert Brown', productsSupplied: 300 },
-    { id: 'sup4', name: 'KitchenPro Inc.', email: 'support@kitchenpro.com', phone: '555-0104', contactPerson: 'Alice Green', productsSupplied: 80 },
-  ];
-
-  useEffect(() => {
+  const fetchSuppliers = async () => {
     setIsLoading(true);
-    const storedSuppliers = JSON.parse(localStorage.getItem('inventorySuppliers')) || mockSuppliers;
-    setSuppliers(storedSuppliers);
-    setIsLoading(false);
-    if (!localStorage.getItem('inventorySuppliers')) {
-      localStorage.setItem('inventorySuppliers', JSON.stringify(mockSuppliers));
+    try {
+      const response = await getSuppliers();
+      if (response && response.data) {
+        setSuppliers(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+      toast({
+        title: 'Notice',
+        description: 'Failed to load suppliers from database.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
-
-  const handleDeleteSupplier = (supplierId) => {
-    const updatedSuppliers = suppliers.filter(s => s.id !== supplierId);
-    setSuppliers(updatedSuppliers);
-    localStorage.setItem('inventorySuppliers', JSON.stringify(updatedSuppliers));
-    toast({ title: "Supplier Deleted", description: "The supplier has been removed.", variant: "destructive" });
   };
 
-  const filteredSuppliers = suppliers.filter(supplier => 
-    supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supplier.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (supplier.contactPerson && supplier.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  useEffect(() => {
+    fetchSuppliers();
+  }, []);
 
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Users2 className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
+  const handleDelete = async (id) => {
+    try {
+      await deleteSupplier(id);
+      setSuppliers(prev => prev.filter(s => (s.id || s._id) !== id));
+      toast({ title: "Supplier Removed", description: "Supplier has been removed from database." });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to delete supplier.", variant: "destructive" });
+    }
+  };
+
+  const filtered = suppliers.filter(s => {
+    const name = s.name || '';
+    const contact = s.contactPerson || '';
+    const email = s.email || '';
+    return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           email.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="space-y-6 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <Users2 className="mr-3 h-8 w-8" /> Manage Suppliers
-        </h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6 old-money-card border-[#2e4034] rounded-xl shadow-xl">
+        <div>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Vendors Directory</span>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#f8f6f0] mt-1 flex items-center">
+            <Users2 className="mr-3 h-7 w-7 text-[#c5a059]" /> Suppliers & Merchants
+          </h1>
+          <p className="text-xs text-[#9ea8a1] mt-0.5">Approved supplier guild & primary manufacturers</p>
+        </div>
         <Link to="/suppliers/new">
-          <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-            <PlusCircle className="mr-2 h-5 w-5" /> Add New Supplier
+          <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4 shadow-lg">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Supplier
           </Button>
         </Link>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Search Suppliers</CardTitle>
-          <div className="relative pt-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 mt-2" />
+      <Card className="old-money-card border-[#2e4034] rounded-xl">
+        <CardHeader className="p-5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
             <Input 
               type="text"
-              placeholder="Search by name, email, or contact person..."
+              placeholder="Search by supplier name, contact person or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
+              className="pl-10 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11"
             />
           </div>
         </CardHeader>
       </Card>
 
-      <AnimatePresence>
-        {filteredSuppliers.length > 0 ? (
-          <div className="grid md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredSuppliers.map((supplier, index) => (
-              <motion.div
-                key={supplier.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-              >
-                <Card className="bg-slate-800/70 border-slate-700 hover:shadow-sky-500/20 transition-shadow duration-300 flex flex-col h-full">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-400">{supplier.name}</CardTitle>
-                      <img  class="w-12 h-12 object-contain rounded-md ml-2 bg-slate-700 p-1" alt={supplier.name + " logo"} src="https://images.unsplash.com/photo-1485531865381-286666aa80a9" />
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Users2 className="h-10 w-10 animate-spin text-[#c5a059]" />
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.length > 0 ? (
+            filtered.map((sup, idx) => {
+              const sid = sup.id || sup._id || idx + 1;
+              return (
+                <Card key={sid} className="old-money-card border-[#2c3e33] hover:border-[#c5a059]/60 transition-all rounded-xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-serif font-semibold text-lg text-[#f8f6f0]">{sup.name}</h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#16291f] text-[#c5a059] border border-[#2c4435]">
+                        {sup.productsSupplied || 0} Products
+                      </span>
                     </div>
-                    <CardDescription className="text-gray-400 pt-1">Contact: {supplier.contactPerson || 'N/A'}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex-grow space-y-2">
-                    <p className="text-sm text-gray-300 flex items-center"><Mail className="mr-2 h-4 w-4 text-gray-500" />{supplier.email}</p>
-                    <p className="text-sm text-gray-300 flex items-center"><Phone className="mr-2 h-4 w-4 text-gray-500" />{supplier.phone}</p>
-                    <p className="text-sm text-gray-300">Products Supplied: <span className="font-semibold text-sky-300">{supplier.productsSupplied}</span></p>
-                  </CardContent>
-                  <CardFooter className="pt-4 border-t border-slate-700 flex justify-end space-x-2">
-                    <Link to={`/suppliers/${supplier.id}`}>
-                      <Button variant="outline" size="sm" className="text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                        <Edit className="mr-1 h-4 w-4" /> View/Edit
+                    {sup.contactPerson && (
+                      <p className="text-xs text-[#c5a059] font-medium mb-3">Contact: {sup.contactPerson}</p>
+                    )}
+                    <div className="space-y-1.5 text-xs text-[#9ea8a1]">
+                      <p className="flex items-center"><Mail className="h-3.5 w-3.5 mr-2 text-[#718277]" /> {sup.email}</p>
+                      <p className="flex items-center"><Phone className="h-3.5 w-3.5 mr-2 text-[#718277]" /> {sup.phone}</p>
+                      {sup.address && (
+                        <p className="flex items-center truncate"><MapPin className="h-3.5 w-3.5 mr-2 text-[#718277]" /> {sup.address}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-[#1e2c22] mt-4 flex justify-between items-center">
+                    <Link to={`/suppliers/${sid}`}>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-[#c5a059] hover:bg-[#1a271f] hover:text-[#f8f6f0]">
+                        <Eye className="h-3.5 w-3.5 mr-1" /> View Details
                       </Button>
                     </Link>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" className="bg-red-600/80 hover:bg-red-600 text-white">
-                          <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-slate-800 border-slate-700 text-gray-200">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-red-400">Confirm Deletion</AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-400">
-                            Are you sure you want to delete supplier "{supplier.name}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="text-gray-300 border-slate-600 hover:bg-slate-700">Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteSupplier(supplier.id)} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </CardFooter>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleDelete(sid)} 
+                      className="h-8 text-xs text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </Card>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-          >
-            <Users2 className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-            <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Suppliers Found</h2>
-            <p className="text-gray-400 mb-6">
-              {searchTerm ? 'No suppliers match your search.' : 'Your supplier list is empty.'}
-            </p>
-            <Link to="/suppliers/new">
-              <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg">
-                <PlusCircle className="mr-2 h-5 w-5" /> Add First Supplier
-              </Button>
-            </Link>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              );
+            })
+          ) : (
+            <div className="col-span-3 text-center py-16 old-money-card border-[#2e4034] rounded-xl">
+              <Users2 className="h-12 w-12 text-[#c5a059] mx-auto mb-3 opacity-80" />
+              <p className="text-xs text-[#9ea8a1]">No suppliers found in MySQL database.</p>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 };
 
 export default SuppliersPage;
-  

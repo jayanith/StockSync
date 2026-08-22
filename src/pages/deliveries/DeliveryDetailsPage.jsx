@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { Truck, ArrowLeft, User, MapPin, CalendarDays, Edit3, PackageSearch, Clock } from 'lucide-react';
-import { Label } from '@/components/ui/label';
+import { Truck, ArrowLeft, MapPin, Calendar, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getDelivery, updateDeliveryStatus } from '@/lib/api';
 
 const DeliveryDetailsPage = () => {
   const { deliveryId } = useParams();
@@ -15,156 +14,156 @@ const DeliveryDetailsPage = () => {
   const { toast } = useToast();
   const [delivery, setDelivery] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('');
-
-  const deliveryStatuses = ["Pending Assignment", "Dispatched", "In Transit", "Delivered", "Delayed", "Failed"];
+  const [selectedStatus, setSelectedStatus] = useState('');
 
   useEffect(() => {
-    setIsLoading(true);
-    const allDeliveries = JSON.parse(localStorage.getItem('inventoryDeliveries')) || [];
-    const foundDelivery = allDeliveries.find(d => d.id === deliveryId);
+    const fetchDelivery = async () => {
+      setIsLoading(true);
+      try {
+        const res = await getDelivery(deliveryId);
+        if (res && res.data) {
+          setDelivery(res.data);
+          setSelectedStatus(res.data.status);
+        }
+      } catch (e) {
+        console.error('Error fetching delivery:', e);
+        toast({ title: 'Error', description: 'Failed to fetch delivery details.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDelivery();
+  }, [deliveryId]);
 
-    if (foundDelivery) {
-      setDelivery(foundDelivery);
-      setCurrentStatus(foundDelivery.status);
-    } else {
-      toast({ title: "Error", description: "Delivery not found.", variant: "destructive" });
-      navigate('/deliveries');
-    }
-    setIsLoading(false);
-  }, [deliveryId, navigate, toast]);
-
-  const handleStatusUpdate = () => {
-     if (currentStatus === delivery.status) {
-      setIsEditingStatus(false);
-      return;
-    }
-    const allDeliveries = JSON.parse(localStorage.getItem('inventoryDeliveries')) || [];
-    const updatedDeliveries = allDeliveries.map(d => 
-      d.id === deliveryId ? { ...d, status: currentStatus } : d
-    );
-    localStorage.setItem('inventoryDeliveries', JSON.stringify(updatedDeliveries));
-    setDelivery(prev => ({ ...prev, status: currentStatus }));
-    setIsEditingStatus(false);
-    toast({ title: "Status Updated", description: `Delivery status changed to ${currentStatus}.` });
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending Assignment': return 'text-gray-400 bg-gray-600/20 border-gray-500';
-      case 'Dispatched': return 'text-blue-400 bg-blue-600/20 border-blue-500';
-      case 'In Transit': return 'text-purple-400 bg-purple-600/20 border-purple-500';
-      case 'Delivered': return 'text-green-400 bg-green-600/20 border-green-500';
-      case 'Delayed': return 'text-orange-400 bg-orange-600/20 border-orange-500';
-      case 'Failed': return 'text-red-400 bg-red-600/20 border-red-500';
-      default: return 'text-gray-400 bg-gray-600/20 border-gray-500';
+  const handleStatusChange = async (newStatus) => {
+    setSelectedStatus(newStatus);
+    try {
+      await updateDeliveryStatus(deliveryId, { status: newStatus });
+      setDelivery(prev => ({ ...prev, status: newStatus }));
+      toast({ title: "Status Updated", description: `Freight status set to ${newStatus}.` });
+    } catch (e) {
+      toast({ title: "Failed", description: e.message || "Could not update delivery status.", variant: "destructive" });
     }
   };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen"><Truck className="h-12 w-12 animate-spin text-sky-500" /></div>;
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Truck className="h-10 w-10 animate-spin text-[#c5a059]" />
+      </div>
+    );
   }
 
   if (!delivery) {
-    return <div className="text-center py-10 text-red-500">Delivery not found.</div>;
+    return (
+      <div className="text-center py-20 old-money-card border-[#2e4034] rounded-xl max-w-lg mx-auto">
+        <h2 className="text-xl font-serif text-[#f8f6f0] mb-3">Delivery Consignment Not Found</h2>
+        <Button onClick={() => navigate('/deliveries')} className="old-money-gold-btn text-xs uppercase tracking-wider">
+          Return to Deliveries
+        </Button>
+      </div>
+    );
   }
-  
-  const DetailItem = ({ label, value, icon, className }) => (
-    <div className={className}>
-      <Label className="text-sm font-medium text-gray-400 flex items-center">
-        {icon && React.cloneElement(icon, { className: "mr-2 h-4 w-4"})}
-        {label}
-      </Label>
-      <p className="text-gray-100">{value || 'N/A'}</p>
-    </div>
-  );
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="max-w-5xl mx-auto space-y-6"
     >
-      <Button variant="outline" onClick={() => navigate('/deliveries')} className="mb-6 text-sky-400 border-sky-500 hover:bg-sky-500/10">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Deliveries
-      </Button>
-
-      <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-        <CardHeader className="border-b border-slate-700 pb-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <div>
-              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-                Delivery {delivery.id}
-              </CardTitle>
-              <CardDescription className="text-gray-400 flex items-center mt-1">
-                Order ID: <Link to={`/orders/${delivery.orderId}`} className="ml-1 text-sky-400 hover:underline">{delivery.orderId}</Link>
-              </CardDescription>
-            </div>
-            <div className={`px-4 py-2 rounded-lg text-sm font-semibold border ${getStatusColor(delivery.status)}`}>
-              Status: {delivery.status}
-            </div>
+      <div className="flex justify-between items-center">
+        <Button 
+          variant="outline" 
+          onClick={() => navigate('/deliveries')} 
+          className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f8f6f0]"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Deliveries
+        </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs uppercase tracking-wider text-[#9ea8a1]">Freight Status:</span>
+          <div className="w-44">
+            <Select value={selectedStatus} onValueChange={handleStatusChange}>
+              <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-9">
+                <SelectValue placeholder="Update status" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="In Transit">In Transit</SelectItem>
+                <SelectItem value="Out for Delivery">Out for Delivery</SelectItem>
+                <SelectItem value="Delivered">Delivered</SelectItem>
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </CardHeader>
-        
-        <CardContent className="pt-6 grid md:grid-cols-2 gap-6">
-          <div className="space-y-6">
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Delivery Information</CardTitle></CardHeader>
-              <CardContent className="grid sm:grid-cols-2 gap-4">
-                <DetailItem label="Customer" value={delivery.customerName} icon={<User />} />
-                <DetailItem label="Assigned Driver" value={delivery.assignedDriver || 'Not Assigned'} icon={<User />} />
-                <DetailItem label="Estimated Delivery" value={new Date(delivery.estimatedDelivery).toLocaleDateString()} icon={<CalendarDays />} />
-                {/* Add more delivery specific details here if available, e.g. actual delivery date, tracking number */}
-                <DetailItem label="Tracking Number" value={delivery.trackingNumber || 'N/A'} icon={<PackageSearch />} />
-                <DetailItem label="Last Update" value={delivery.lastUpdate ? new Date(delivery.lastUpdate).toLocaleString() : 'N/A'} icon={<Clock />} className="sm:col-span-2"/>
-              </CardContent>
-            </Card>
-          </div>
+        </div>
+      </div>
 
-          <div className="space-y-6">
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Update Status</CardTitle></CardHeader>
-              <CardContent>
-                {isEditingStatus ? (
-                  <div className="space-y-3">
-                    <Select value={currentStatus} onValueChange={setCurrentStatus}>
-                      <SelectTrigger className="w-full bg-slate-600 border-slate-500 text-white">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-700 border-slate-600 text-white">
-                        {deliveryStatuses.map(status => (
-                          <SelectItem key={status} value={status} className="hover:bg-sky-600/50 focus:bg-sky-500">{status}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button onClick={handleStatusUpdate} size="sm" className="flex-1 bg-sky-500 hover:bg-sky-600 text-white">Save</Button>
-                      <Button onClick={() => { setIsEditingStatus(false); setCurrentStatus(delivery.status); }} size="sm" variant="outline" className="flex-1 text-gray-300 border-slate-500 hover:bg-slate-600">Cancel</Button>
-                    </div>
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+            <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+              <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Consignment Tracking</span>
+              <CardTitle className="text-2xl font-serif text-[#f8f6f0] mt-1">{delivery.trackingNumber || `TRK-00${delivery.id}`}</CardTitle>
+              <CardDescription className="text-xs text-[#9ea8a1]">Carrier: {delivery.carrier || 'Armored Freight Logistics'}</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-xs text-[#d8d3c5]">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider mb-1">Origin Facility</span>
+                  <p className="font-medium text-[#f8f6f0] flex items-center"><MapPin className="h-3.5 w-3.5 mr-1 text-[#c5a059]" /> {delivery.origin || 'London Mayfair Vault'}</p>
+                </div>
+                <div>
+                  <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider mb-1">Destination Address</span>
+                  <p className="font-medium text-[#f8f6f0] flex items-center"><MapPin className="h-3.5 w-3.5 mr-1 text-[#c5a059]" /> {delivery.destination || 'Highland Manor, Scotland'}</p>
+                </div>
+              </div>
+              <hr className="border-[#202f25] my-2" />
+              <div>
+                <h4 className="text-xs uppercase tracking-wider font-semibold text-[#c5a059] mb-2">Manifest Items</h4>
+                {delivery.items && delivery.items.length > 0 ? (
+                  <div className="space-y-2">
+                    {delivery.items.map((i, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-[#111a14] border border-[#243328] flex justify-between">
+                        <span>{i.productName || 'Catalog Consignment Item'}</span>
+                        <span className="text-[#c5a059] font-semibold">{i.quantity} units</span>
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <Button onClick={() => setIsEditingStatus(true)} variant="outline" className="w-full text-yellow-400 border-yellow-500 hover:bg-yellow-500/10">
-                    <Edit3 className="mr-2 h-4 w-4" /> Change Status
-                  </Button>
+                  <p className="text-xs text-[#9ea8a1]">Single consignment parcel.</p>
                 )}
-              </CardContent>
-            </Card>
-            {/* Placeholder for map integration or delivery history */}
-            <Card className="bg-slate-700/50 border-slate-600">
-                <CardHeader><CardTitle className="text-lg text-sky-300">Delivery Route (Placeholder)</CardTitle></CardHeader>
-                <CardContent className="h-48 flex items-center justify-center">
-                    <MapPin className="h-16 w-16 text-slate-500" />
-                    <p className="text-slate-500 ml-2">Map integration coming soon.</p>
-                </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+              {delivery.notes && (
+                <div className="p-3.5 rounded-lg bg-[#111a14] border border-[#243328] mt-4">
+                  <span className="text-[#c5a059] font-medium block mb-1">Courier Notes:</span>
+                  {delivery.notes}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="md:col-span-1">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl p-5 space-y-4 text-xs text-[#d8d3c5]">
+            <h4 className="font-serif font-semibold text-base text-[#f8f6f0]">Transit Metrics</h4>
+            <div>
+              <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Classification</span>
+              <span className="font-semibold text-[#c5a059]">{delivery.type || 'OUTBOUND'}</span>
+            </div>
+            <div>
+              <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Estimated Delivery</span>
+              <span>{delivery.estimatedDelivery || 'In Scheduled Transit'}</span>
+            </div>
+            <div>
+              <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Confirmed Receipt</span>
+              <span>{delivery.actualDelivery || 'Pending Final Delivery'}</span>
+            </div>
+          </Card>
+        </div>
+      </div>
     </motion.div>
   );
 };
 
 export default DeliveryDetailsPage;
-  

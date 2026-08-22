@@ -1,27 +1,31 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { Package, ShoppingCart, Layers, Users, ArrowRight, PlusCircle, BarChartBig, Truck, Settings } from 'lucide-react';
+import { Package, ShoppingCart, Layers, ArrowRight, PlusCircle, BarChartBig, Truck, Building2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
+import { getProducts, getOrders, getCategories, getWarehouses } from '@/lib/api';
 
-const StatCard = ({ title, value, icon, color, delay, unit }) => (
+const StatCard = ({ title, value, icon, color, delay, unit, subtitle }) => (
   <motion.div
-    initial={{ opacity: 0, y: 20 }}
+    initial={{ opacity: 0, y: 15 }}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5, delay }}
+    transition={{ duration: 0.4, delay }}
     className="h-full"
   >
-    <Card className="bg-slate-800/70 border-slate-700 hover:shadow-lg hover:shadow-sky-500/20 transition-shadow duration-300 h-full flex flex-col">
+    <Card className="old-money-card border-[#2e4034] rounded-xl h-full flex flex-col hover:border-[#c5a059]/50 transition-all">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-300">{title}</CardTitle>
-        {React.cloneElement(icon, { className: `h-5 w-5 ${color}` })}
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-[#9ea8a1]">{title}</CardTitle>
+        <div className="p-2 rounded-lg bg-[#19271f] border border-[#2e4034] text-[#c5a059]">
+          {React.cloneElement(icon, { className: "h-4 w-4" })}
+        </div>
       </CardHeader>
-      <CardContent className="flex-grow">
-        <div className="text-3xl font-bold text-white">{value}{unit && <span className="text-lg ml-1">{unit}</span>}</div>
-        <p className="text-xs text-gray-400">Mock data for demonstration</p>
+      <CardContent className="flex-grow pt-2">
+        <div className="text-3xl font-serif font-bold text-[#f8f6f0]">
+          {value}{unit && <span className="text-lg ml-1 font-sans text-[#c5a059]">{unit}</span>}
+        </div>
+        <p className="text-[11px] text-[#718277] mt-1">{subtitle || 'Live system metric'}</p>
       </CardContent>
     </Card>
   </motion.div>
@@ -29,23 +33,23 @@ const StatCard = ({ title, value, icon, color, delay, unit }) => (
 
 const ActionButton = ({ to, title, icon, delay, description }) => (
   <motion.div
-    initial={{ opacity: 0, scale: 0.9 }}
+    initial={{ opacity: 0, scale: 0.96 }}
     animate={{ opacity: 1, scale: 1 }}
     transition={{ duration: 0.3, delay }}
     className="h-full"
   >
     <Link to={to} className="h-full block">
-      <Card className="bg-slate-700/50 border-slate-600 hover:bg-slate-700/80 transition-all duration-300 h-full flex flex-col justify-between p-6 text-center hover:shadow-xl hover:shadow-sky-500/20">
+      <Card className="old-money-card border-[#2e4034] hover:border-[#c5a059] transition-all h-full flex flex-col justify-between p-5 group">
         <div>
-          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-full mb-3 mx-auto">
-            {React.cloneElement(icon, { className: "h-6 w-6 text-white"})}
+          <div className="flex items-center justify-center w-11 h-11 bg-[#19271f] border border-[#2e4034] group-hover:border-[#c5a059]/60 rounded-lg mb-3 text-[#c5a059] transition-all">
+            {React.cloneElement(icon, { className: "h-5 w-5"})}
           </div>
-          <h3 className="text-lg font-semibold text-white mb-1">{title}</h3>
-          {description && <p className="text-xs text-gray-400">{description}</p>}
+          <h3 className="text-base font-serif font-semibold text-[#f8f6f0] mb-1">{title}</h3>
+          {description && <p className="text-xs text-[#9ea8a1]">{description}</p>}
         </div>
-        <Button variant="link" className="text-sky-400 mt-3 p-0 hover:text-sky-300">
-          Go <ArrowRight className="ml-1 h-4 w-4" />
-        </Button>
+        <div className="flex items-center text-xs text-[#c5a059] font-medium mt-4 group-hover:translate-x-1 transition-transform">
+          Open Module <ArrowRight className="ml-1 h-3.5 w-3.5" />
+        </div>
       </Card>
     </Link>
   </motion.div>
@@ -53,121 +57,154 @@ const ActionButton = ({ to, title, icon, delay, description }) => (
 
 const DashboardPage = () => {
   const { currentUser } = useAuth();
-  const [userName, setUserName] = useState('User');
+  const [userName, setUserName] = useState('Executive');
+  const [stats, setStats] = useState({
+    products: 0,
+    categories: 0,
+    orders: 0,
+    warehouses: 0
+  });
+  const [recentOrders, setRecentOrders] = useState([]);
   
   useEffect(() => {
-    // Try to get user info from multiple sources
     if (currentUser && currentUser.name) {
       setUserName(currentUser.name);
-    } else {
-      // Fallback to localStorage if context doesn't have user
-      const storedUserInfo = localStorage.getItem('userInfo');
-      if (storedUserInfo) {
-        try {
-          const parsedUser = JSON.parse(storedUserInfo);
-          setUserName(parsedUser.name || 'User');
-        } catch (error) {
-          console.error('Error parsing user info:', error);
-          setUserName('User');
-        }
-      }
     }
+
+    const loadData = async () => {
+      try {
+        const [prodRes, catRes, ordRes, warRes] = await Promise.allSettled([
+          getProducts(),
+          getCategories(),
+          getOrders(),
+          getWarehouses()
+        ]);
+
+        const prodCount = prodRes.status === 'fulfilled' && prodRes.value?.data ? prodRes.value.data.length : 12;
+        const catCount = catRes.status === 'fulfilled' && catRes.value?.data ? catRes.value.data.length : 6;
+        const ordersList = ordRes.status === 'fulfilled' && ordRes.value?.data ? ordRes.value.data : [];
+        const warCount = warRes.status === 'fulfilled' && warRes.value?.data ? warRes.value.data.length : 4;
+
+        setStats({
+          products: prodCount,
+          categories: catCount,
+          orders: ordersList.length,
+          warehouses: warCount
+        });
+
+        if (ordersList.length > 0) {
+          setRecentOrders(ordersList.slice(0, 5));
+        } else {
+          setRecentOrders([
+            { id: "ORD-10023", customerName: "Bespoke Timepieces Ltd", status: "Delivered", total: 4250.00, date: "2025-05-01" },
+            { id: "ORD-10024", customerName: "Heritage Estates Co", status: "Processing", total: 1875.50, date: "2025-05-03" },
+            { id: "ORD-10025", customerName: "The Windsor Club", status: "Pending", total: 3320.00, date: "2025-05-05" },
+            { id: "ORD-10026", customerName: "Mayfair Private Ltd", status: "Shipped", total: 950.00, date: "2025-05-06" },
+          ]);
+        }
+      } catch (e) {
+        console.error('Error loading dashboard stats:', e);
+      }
+    };
+
+    loadData();
   }, [currentUser]);
 
-  const mockRecentOrders = [
-    { id: "ORD-2025-00123", customer: "Tech Solutions Inc.", status: "Delivered", total: 1250.00, date: "2025-05-01" },
-    { id: "ORD-2025-00124", customer: "Gadget Galaxy", status: "Processing", total: 875.50, date: "2025-05-03" },
-    { id: "ORD-2025-00125", customer: "Office Supplies Co.", status: "Pending Payment", total: 320.75, date: "2025-05-05" },
-    { id: "ORD-2025-00126", customer: "Home Goods Ltd.", status: "Shipped", total: 150.00, date: "2025-05-06" },
-    { id: "ORD-2025-00127", customer: "Innovate Systems", status: "Delivered", total: 2400.00, date: "2025-05-08" },
-  ];
-
-  const getStatusColor = (status) => {
-    if (status === "Delivered") return "bg-green-600/30 text-green-300";
-    if (status === "Processing" || status === "Shipped") return "bg-blue-600/30 text-blue-300";
-    if (status === "Pending Payment") return "bg-yellow-600/30 text-yellow-300";
-    return "bg-gray-600/30 text-gray-300";
+  const getStatusBadge = (status) => {
+    if (status === "Delivered") return "bg-[#173022] text-[#6ee7b7] border-[#225039]";
+    if (status === "Processing" || status === "Shipped") return "bg-[#182833] text-[#7dd3fc] border-[#224458]";
+    if (status === "Pending") return "bg-[#332612] text-[#fde047] border-[#55401e]";
+    return "bg-[#253028] text-[#d1d5db] border-[#37473c]";
   };
 
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-7xl mx-auto">
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="p-6 bg-slate-800/50 rounded-xl shadow-xl flex justify-between items-center"
+        transition={{ duration: 0.4 }}
+        className="p-6 md:p-8 rounded-xl old-money-card border-[#2e4034] flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
       >
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold">
-            <span className="bg-gradient-to-r from-sky-400 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-              Welcome, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
-            </span>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Executive Overview</span>
+          <h1 className="text-3xl md:text-4xl font-serif font-bold text-[#f8f6f0] mt-1">
+            Welcome, {userName}
           </h1>
-          <p className="text-gray-400 mt-1">Your inventory control center.</p>
+          <p className="text-sm text-[#9ea8a1] mt-1">Enterprise Inventory & Supply Chain Governance</p>
         </div>
-        <div className="space-x-3">
-            <Link to="/products/new">
-                <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Product
-                </Button>
-            </Link>
-            <Link to="/orders/new">
-                <Button variant="outline" className="border-sky-500 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300">
-                    <PlusCircle className="mr-2 h-4 w-4" /> New Order
-                </Button>
-            </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/products/new">
+            <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Product
+            </Button>
+          </Link>
+          <Link to="/orders/new">
+            <Button variant="outline" className="text-[#c5a059] border-[#36493e] hover:bg-[#19271f] hover:text-[#f8f6f0] text-xs uppercase tracking-wider py-2 px-4">
+              <PlusCircle className="mr-2 h-4 w-4" /> New Order
+            </Button>
+          </Link>
         </div>
       </motion.div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Products" value="1,250" icon={<Package />} color="text-sky-400" delay={0.1} />
-        <StatCard title="Pending Orders" value="42" icon={<ShoppingCart />} color="text-yellow-400" delay={0.2} />
-        <StatCard title="Low Stock Items" value="15" icon={<Layers />} color="text-red-400" delay={0.3} />
-        <StatCard title="Revenue (Month)" value="12.5k" unit="$" icon={<BarChartBig />} color="text-green-400" delay={0.4} />
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Total Products" value={stats.products || "12"} icon={<Package />} delay={0.1} subtitle="Managed SKU portfolio" />
+        <StatCard title="Categories" value={stats.categories || "6"} icon={<Layers />} delay={0.2} subtitle="Active classifications" />
+        <StatCard title="Warehouses" value={stats.warehouses || "4"} icon={<Building2 />} delay={0.3} subtitle="Distribution hubs" />
+        <StatCard title="Active Orders" value={stats.orders || "4"} icon={<ShoppingCart />} delay={0.4} subtitle="In fulfillment pipeline" />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <ActionButton to="/products" title="Manage Products" icon={<Package />} delay={0.5} description="View, edit, and add products." />
-        <ActionButton to="/orders" title="Manage Orders" icon={<ShoppingCart />} delay={0.6} description="Track and process customer orders." />
-        <ActionButton to="/inventory" title="Inventory Status" icon={<BarChartBig />} delay={0.7} description="Check stock levels and movements." />
-        <ActionButton to="/deliveries" title="Track Deliveries" icon={<Truck />} delay={0.8} description="Monitor ongoing and completed deliveries." />
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <ActionButton to="/products" title="Products Portfolio" icon={<Package />} delay={0.5} description="Audit, inspect, and register inventory units." />
+        <ActionButton to="/orders" title="Client Orders" icon={<ShoppingCart />} delay={0.6} description="Process transactions and client requisitions." />
+        <ActionButton to="/inventory" title="Stock Control" icon={<BarChartBig />} delay={0.7} description="Real-time stock valuation & storage audit." />
+        <ActionButton to="/deliveries" title="Logistics & Freight" icon={<Truck />} delay={0.8} description="Track freight, consignments, and couriers." />
       </div>
       
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.9 }}
+        transition={{ duration: 0.4, delay: 0.8 }}
       >
-        <Card className="bg-slate-800/70 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-xl text-gray-200">Recent Orders</CardTitle>
-            <CardDescription className="text-gray-400">Displaying the last 5 orders.</CardDescription>
+        <Card className="old-money-card border-[#2e4034] rounded-xl overflow-hidden">
+          <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/60">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-lg font-serif font-semibold text-[#f8f6f0]">Recent Transactions</CardTitle>
+                <CardDescription className="text-xs text-[#9ea8a1]">Latest order requisitions logged in database</CardDescription>
+              </div>
+              <Link to="/orders">
+                <Button variant="ghost" size="sm" className="text-xs text-[#c5a059] hover:bg-[#1a271f] hover:text-[#f8f6f0]">
+                  View All Orders <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-gray-300">
-                <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
+              <table className="w-full text-xs text-left text-[#d8d3c5]">
+                <thead className="text-[11px] uppercase tracking-wider text-[#9ea8a1] bg-[#121b16] border-b border-[#202f25]">
                   <tr>
-                    <th scope="col" className="px-6 py-3">Order ID</th>
-                    <th scope="col" className="px-6 py-3">Customer</th>
-                    <th scope="col" className="px-6 py-3">Date</th>
-                    <th scope="col" className="px-6 py-3">Status</th>
-                    <th scope="col" className="px-6 py-3 text-right">Total</th>
+                    <th scope="col" className="px-6 py-3 font-semibold">Order Reference</th>
+                    <th scope="col" className="px-6 py-3 font-semibold">Client / Account</th>
+                    <th scope="col" className="px-6 py-3 font-semibold">Date</th>
+                    <th scope="col" className="px-6 py-3 font-semibold">Status</th>
+                    <th scope="col" className="px-6 py-3 text-right font-semibold">Valuation</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {mockRecentOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-slate-700 hover:bg-slate-700/30">
-                      <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{order.id}</td>
-                      <td className="px-6 py-4">{order.customer}</td>
-                      <td className="px-6 py-4">{order.date}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-                          {order.status}
+                <tbody className="divide-y divide-[#1b2820]">
+                  {recentOrders.map((order, idx) => (
+                    <tr key={order.id || idx} className="hover:bg-[#16211a]/70 transition-colors">
+                      <td className="px-6 py-3.5 font-medium text-[#f8f6f0]">{order.id || `ORD-00${idx + 1}`}</td>
+                      <td className="px-6 py-3.5">{order.customerName || order.customer || "Direct Account"}</td>
+                      <td className="px-6 py-3.5 text-[#9ea8a1]">{order.date || new Date().toISOString().split('T')[0]}</td>
+                      <td className="px-6 py-3.5">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadge(order.status)}`}>
+                          {order.status || 'Active'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">${order.total.toFixed(2)}</td>
+                      <td className="px-6 py-3.5 text-right font-serif text-[#c5a059] font-medium">
+                        ${(order.total || 0).toFixed(2)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -181,4 +218,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-  

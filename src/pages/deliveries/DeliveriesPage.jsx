@@ -1,170 +1,182 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { motion } from 'framer-motion';
-import { Truck, Eye, Filter, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
+import { Truck, PlusCircle, Search, Filter, Eye, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getDeliveries } from '@/lib/api';
 
 const DeliveriesPage = () => {
   const [deliveries, setDeliveries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const { toast } = useToast();
 
-  const mockDeliveries = [
-    { id: 'DEL-001', orderId: 'ORD-002', customerName: 'Bob The Builder', assignedDriver: 'Driver Dan', status: 'In Transit', estimatedDelivery: '2025-05-10' },
-    { id: 'DEL-002', orderId: 'ORD-003', customerName: 'Charlie Brown', assignedDriver: 'Driver Alice', status: 'Delivered', estimatedDelivery: '2025-05-06' },
-    { id: 'DEL-003', orderId: 'ORD-005', customerName: 'Edward Scissorhands', assignedDriver: 'Driver Dan', status: 'Dispatched', estimatedDelivery: '2025-05-12' },
-  ];
-  
-  const deliveryStatuses = ["Pending Assignment", "Dispatched", "In Transit", "Delivered", "Delayed", "Failed"];
-
-  useEffect(() => {
+  const fetchDeliveries = async () => {
     setIsLoading(true);
-    // Simulate fetching deliveries - in a real app, this would be an API call
-    // For now, we'll use mock data or data derived from orders
-    const storedDeliveries = JSON.parse(localStorage.getItem('inventoryDeliveries')) || mockDeliveries;
-    setDeliveries(storedDeliveries);
-    setIsLoading(false);
-    if (!localStorage.getItem('inventoryDeliveries')) {
-        localStorage.setItem('inventoryDeliveries', JSON.stringify(mockDeliveries));
-    }
-  }, []);
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending Assignment': return 'text-gray-400 bg-gray-600/20';
-      case 'Dispatched': return 'text-blue-400 bg-blue-600/20';
-      case 'In Transit': return 'text-purple-400 bg-purple-600/20';
-      case 'Delivered': return 'text-green-400 bg-green-600/20';
-      case 'Delayed': return 'text-orange-400 bg-orange-600/20';
-      case 'Failed': return 'text-red-400 bg-red-600/20';
-      default: return 'text-gray-400 bg-gray-600/20';
+    try {
+      const response = await getDeliveries();
+      if (response && response.data) {
+        setDeliveries(response.data);
+      }
+    } catch (e) {
+      console.error('Error fetching deliveries:', e);
+      toast({ title: 'Notice', description: 'Failed to fetch deliveries from database.' });
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  const filteredDeliveries = deliveries.filter(delivery => {
-    const matchesSearchTerm = delivery.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              delivery.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              delivery.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              (delivery.assignedDriver && delivery.assignedDriver.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || delivery.status === statusFilter;
-    return matchesSearchTerm && matchesStatus;
+
+  useEffect(() => {
+    fetchDeliveries();
+  }, []);
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'Delivered':
+        return 'bg-[#173022] text-[#6ee7b7] border-[#225039]';
+      case 'In Transit':
+      case 'Out for Delivery':
+        return 'bg-[#182833] text-[#7dd3fc] border-[#224458]';
+      case 'Pending':
+        return 'bg-[#332612] text-[#fde047] border-[#55401e]';
+      case 'Cancelled':
+        return 'bg-[#331b1b] text-[#fca5a5] border-[#522525]';
+      default:
+        return 'bg-[#253028] text-[#d1d5db] border-[#37473c]';
+    }
+  };
+
+  const filtered = deliveries.filter(d => {
+    const tracking = d.trackingNumber || '';
+    const carrier = d.carrier || '';
+    const matchesSearch = tracking.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          carrier.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter === 'all' || d.type?.toLowerCase() === typeFilter.toLowerCase();
+    return matchesSearch && matchesType;
   });
-
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Truck className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="space-y-6 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <Truck className="mr-3 h-8 w-8" /> Delivery Tracking
-        </h1>
-        {/* Button to manually create a delivery could go here if needed */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6 old-money-card border-[#2e4034] rounded-xl shadow-xl">
+        <div>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Logistics Pipeline</span>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#f8f6f0] mt-1 flex items-center">
+            <Truck className="mr-3 h-7 w-7 text-[#c5a059]" /> Freight & Deliveries
+          </h1>
+          <p className="text-xs text-[#9ea8a1] mt-0.5">Track armored couriers, inward freight, and outbound consignments</p>
+        </div>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Filter & Search Deliveries</CardTitle>
-          <div className="flex flex-col md:flex-row gap-4 pt-4">
+      <Card className="old-money-card border-[#2e4034] rounded-xl">
+        <CardHeader className="p-5">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
               <Input 
                 type="text"
-                placeholder="Search by Delivery ID, Order ID, Customer, Driver..."
+                placeholder="Search by tracking number, carrier, or destination..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
+                className="pl-10 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[200px] bg-slate-700 border-slate-600 text-white focus:ring-sky-500">
-                <Filter className="mr-2 h-4 w-4 text-gray-400" />
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                <SelectItem value="all" className="hover:bg-sky-700/50 focus:bg-sky-600">All Statuses</SelectItem>
-                {deliveryStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="hover:bg-sky-700/50 focus:bg-sky-600">{status}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full md:w-60">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                  <Filter className="mr-2 h-3.5 w-3.5 text-[#c5a059]" />
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                  <SelectItem value="all">All Freight Types</SelectItem>
+                  <SelectItem value="inbound">Inbound (Supplier)</SelectItem>
+                  <SelectItem value="outbound">Outbound (Client)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
       </Card>
 
-      {filteredDeliveries.length > 0 ? (
-        <div className="overflow-x-auto bg-slate-800/70 border border-slate-700 rounded-lg shadow-md">
-          <table className="w-full text-sm text-left text-gray-300">
-            <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
-              <tr>
-                <th scope="col" className="px-6 py-3">Delivery ID</th>
-                <th scope="col" className="px-6 py-3">Order ID</th>
-                <th scope="col" className="px-6 py-3">Customer</th>
-                <th scope="col" className="px-6 py-3">Driver</th>
-                <th scope="col" className="px-6 py-3">Est. Delivery</th>
-                <th scope="col" className="px-6 py-3 text-center">Status</th>
-                <th scope="col" className="px-6 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDeliveries.map((delivery, index) => (
-                <motion.tr
-                  key={delivery.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="border-b border-slate-700 hover:bg-slate-700/30"
-                >
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{delivery.id}</td>
-                  <td className="px-6 py-4">{delivery.orderId}</td>
-                  <td className="px-6 py-4">{delivery.customerName}</td>
-                  <td className="px-6 py-4">{delivery.assignedDriver || 'N/A'}</td>
-                  <td className="px-6 py-4">{delivery.estimatedDelivery}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(delivery.status)}`}>
-                      {delivery.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <Link to={`/deliveries/${delivery.id}`}>
-                      <Button variant="ghost" size="sm" className="text-sky-400 hover:text-sky-300 hover:bg-sky-900/30">
-                        <Eye className="mr-1 h-4 w-4" /> View
-                      </Button>
-                    </Link>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Truck className="h-10 w-10 animate-spin text-[#c5a059]" />
         </div>
       ) : (
-         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-        >
-          <Truck className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-          <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Deliveries Found</h2>
-          <p className="text-gray-400 mb-6">
-            {searchTerm || statusFilter !== 'all' ? 'No deliveries match your current filters.' : 'There are no deliveries to display.'}
-          </p>
-        </motion.div>
+        <Card className="old-money-card border-[#2e4034] rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-[#d8d3c5]">
+              <thead className="text-[11px] uppercase tracking-wider text-[#9ea8a1] bg-[#121b16] border-b border-[#202f25]">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Tracking #</th>
+                  <th className="px-6 py-4 font-semibold">Type</th>
+                  <th className="px-6 py-4 font-semibold">Carrier</th>
+                  <th className="px-6 py-4 font-semibold">Origin & Destination</th>
+                  <th className="px-6 py-4 font-semibold">ETA / Delivered</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 text-center font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1b2820]">
+                {filtered.length > 0 ? (
+                  filtered.map((del, idx) => {
+                    const dId = del.id || del._id || idx + 1;
+                    const isOut = del.type?.toUpperCase() === 'OUTBOUND';
+                    return (
+                      <tr key={dId} className="hover:bg-[#16211a]/70 transition-colors">
+                        <td className="px-6 py-4 font-mono font-medium text-[#f8f6f0]">{del.trackingNumber || `TRK-00${dId}`}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-semibold ${
+                            isOut ? 'bg-[#1d2d38] text-[#38bdf8]' : 'bg-[#291f38] text-[#c084fc]'
+                          }`}>
+                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {del.type || 'OUTBOUND'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-medium text-[#e5dec9]">{del.carrier || 'Brinks Secure Express'}</td>
+                        <td className="px-6 py-4">
+                          <div className="text-[#f4efe6] truncate max-w-[200px]">{del.destination || 'Client Residence'}</div>
+                          <div className="text-[10px] text-[#718277] truncate max-w-[200px]">From: {del.origin || 'Mayfair Depository'}</div>
+                        </td>
+                        <td className="px-6 py-4 text-[#9ea8a1]">{del.actualDelivery || del.estimatedDelivery || 'In Transit'}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadge(del.status)}`}>
+                            {del.status || 'In Transit'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Link to={`/deliveries/${dId}`}>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs text-[#c5a059] hover:bg-[#1f2e25] hover:text-[#f8f6f0]">
+                              <Eye className="h-3.5 w-3.5 mr-1" /> View
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="text-center py-12 text-[#9ea8a1]">
+                      No active consignments found in database.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </motion.div>
   );
 };
 
 export default DeliveriesPage;
-  

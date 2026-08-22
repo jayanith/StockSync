@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { ShoppingCart, ArrowLeft, User, MapPin, CalendarDays, DollarSign, Edit3, Package, Printer, FileText } from 'lucide-react';
-import { Label } from '@/components/ui/label';
+import { ShoppingCart, ArrowLeft, User, MapPin, Mail, Calendar, CheckCircle2, Clock, Truck, XCircle, DollarSign, Package } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getOrder, updateOrderStatus, cancelOrder } from '@/lib/api';
 
 const OrderDetailsPage = () => {
   const { orderId } = useParams();
@@ -15,204 +14,172 @@ const OrderDetailsPage = () => {
   const { toast } = useToast();
   const [order, setOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
 
-  const orderStatuses = ["Pending", "Approved", "Shipped", "Delivered", "Cancelled"];
+  const fetchOrderDetails = async () => {
+    setIsLoading(true);
+    try {
+      const res = await getOrder(orderId);
+      if (res && res.data) {
+        setOrder(res.data);
+        setSelectedStatus(res.data.status);
+      }
+    } catch (error) {
+      console.error('Error loading order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to retrieve order details from database.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setIsLoading(true);
-    const allOrders = JSON.parse(localStorage.getItem('inventoryOrders')) || [];
-    const foundOrder = allOrders.find(o => o.id === orderId);
+    fetchOrderDetails();
+  }, [orderId]);
 
-    if (foundOrder) {
-      setOrder(foundOrder);
-      setCurrentStatus(foundOrder.status);
-    } else {
-      toast({ title: "Error", description: "Order not found.", variant: "destructive" });
-      navigate('/orders');
-    }
-    setIsLoading(false);
-  }, [orderId, navigate, toast]);
-
-  const handleStatusUpdate = () => {
-    if (currentStatus === order.status) {
-      setIsEditingStatus(false);
-      return;
-    }
-    const allOrders = JSON.parse(localStorage.getItem('inventoryOrders')) || [];
-    const updatedOrders = allOrders.map(o => 
-      o.id === orderId ? { ...o, status: currentStatus } : o
-    );
-    localStorage.setItem('inventoryOrders', JSON.stringify(updatedOrders));
-    setOrder(prev => ({ ...prev, status: currentStatus }));
-    setIsEditingStatus(false);
-    toast({ title: "Status Updated", description: `Order status changed to ${currentStatus}.` });
-  };
-  
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending': return 'text-yellow-400 bg-yellow-600/20 border-yellow-500';
-      case 'Approved': return 'text-blue-400 bg-blue-600/20 border-blue-500';
-      case 'Shipped': return 'text-purple-400 bg-purple-600/20 border-purple-500';
-      case 'Delivered': return 'text-green-400 bg-green-600/20 border-green-500';
-      case 'Cancelled': return 'text-red-400 bg-red-600/20 border-red-500';
-      default: return 'text-gray-400 bg-gray-600/20 border-gray-500';
+  const handleStatusChange = async (newStatus) => {
+    setSelectedStatus(newStatus);
+    try {
+      if (newStatus === 'Cancelled') {
+        await cancelOrder(orderId);
+      } else {
+        await updateOrderStatus(orderId, { status: newStatus });
+      }
+      setOrder(prev => ({ ...prev, status: newStatus }));
+      toast({ title: "Status Updated", description: `Order status changed to ${newStatus}.` });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({ title: "Update Failed", description: error.message || "Could not update status.", variant: "destructive" });
     }
   };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen"><ShoppingCart className="h-12 w-12 animate-spin text-sky-500" /></div>;
+    return (
+      <div className="flex justify-center items-center py-20">
+        <ShoppingCart className="h-10 w-10 animate-spin text-[#c5a059]" />
+      </div>
+    );
   }
 
   if (!order) {
-    return <div className="text-center py-10 text-red-500">Order not found.</div>;
+    return (
+      <div className="text-center py-20 old-money-card border-[#2e4034] rounded-xl max-w-lg mx-auto">
+        <h2 className="text-xl font-serif text-[#f8f6f0] mb-3">Order Not Found</h2>
+        <Button onClick={() => navigate('/orders')} className="old-money-gold-btn text-xs uppercase tracking-wider">
+          Return to Orders
+        </Button>
+      </div>
+    );
   }
-
-  const DetailItem = ({ label, value, icon, className }) => (
-    <div className={className}>
-      <Label className="text-sm font-medium text-gray-400 flex items-center">
-        {icon && React.cloneElement(icon, { className: "mr-2 h-4 w-4"})}
-        {label}
-      </Label>
-      <p className="text-gray-100">{value || 'N/A'}</p>
-    </div>
-  );
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="max-w-5xl mx-auto space-y-6"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <Button variant="outline" onClick={() => navigate('/orders')} className="text-sky-400 border-sky-500 hover:bg-sky-500/10 self-start md:self-center">
+      <div className="flex justify-between items-center">
+        <Button 
+          variant="outline" 
+          onClick={() => navigate('/orders')} 
+          className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f8f6f0]"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
         </Button>
-        <div className="flex gap-2">
-            <Button variant="outline" className="text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                <Printer className="mr-2 h-4 w-4" /> Print Invoice
-            </Button>
-             <Button variant="outline" className="text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                <FileText className="mr-2 h-4 w-4" /> Export Details
-            </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs uppercase tracking-wider text-[#9ea8a1]">Order Status:</span>
+          <div className="w-44">
+            <Select value={selectedStatus} onValueChange={handleStatusChange}>
+              <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-9">
+                <SelectValue placeholder="Update status" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="Processing">Processing</SelectItem>
+                <SelectItem value="Shipped">Shipped</SelectItem>
+                <SelectItem value="Delivered">Delivered</SelectItem>
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-        <CardHeader className="border-b border-slate-700 pb-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <div>
-              <CardTitle className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-                Order {order.id}
-              </CardTitle>
-              <CardDescription className="text-gray-400 flex items-center mt-1">
-                <CalendarDays className="mr-2 h-4 w-4" /> Placed on: {new Date(order.date).toLocaleDateString()}
-              </CardDescription>
-            </div>
-            <div className={`px-4 py-2 rounded-lg text-sm font-semibold border ${getStatusColor(order.status)}`}>
-              Status: {order.status}
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Customer Information</CardTitle></CardHeader>
-              <CardContent className="grid sm:grid-cols-2 gap-4">
-                <DetailItem label="Name" value={order.customerName} icon={<User />} />
-                <DetailItem label="Email" value={order.customerEmail} icon={<User />} />
-                <DetailItem label="Shipping Address" value={order.shippingAddress} icon={<MapPin />} className="sm:col-span-2"/>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Order Items</CardTitle></CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-gray-400">
-                      <tr>
-                        <th className="py-2 text-left">Product</th>
-                        <th className="py-2 text-center">Quantity</th>
-                        <th className="py-2 text-right">Unit Price</th>
-                        <th className="py-2 text-right">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-gray-200">
-                      {order.items.map((item, index) => (
-                        <tr key={index} className="border-b border-slate-600 last:border-b-0">
-                          <td className="py-3">{item.productName}</td>
-                          <td className="py-3 text-center">{item.quantity}</td>
-                          <td className="py-3 text-right">${item.unitPrice.toFixed(2)}</td>
-                          <td className="py-3 text-right">${(item.quantity * item.unitPrice).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+            <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Requisition Details</span>
+                  <CardTitle className="text-2xl font-serif text-[#f8f6f0] mt-0.5">
+                    Order #{order.id || order._id}
+                  </CardTitle>
                 </div>
-              </CardContent>
-            </Card>
-            {order.notes && (
-                 <Card className="bg-slate-700/50 border-slate-600">
-                    <CardHeader><CardTitle className="text-lg text-sky-300">Order Notes</CardTitle></CardHeader>
-                    <CardContent>
-                        <p className="text-gray-300 whitespace-pre-wrap">{order.notes}</p>
-                    </CardContent>
-                </Card>
-            )}
-          </div>
-
-          <div className="md:col-span-1 space-y-6">
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Order Summary</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <div className="flex justify-between text-gray-300"><span>Subtotal</span><span>${order.total.toFixed(2)}</span></div>
-                <div className="flex justify-between text-gray-300"><span>Shipping</span><span>$0.00</span></div>
-                <div className="flex justify-between text-gray-300"><span>Tax (Est.)</span><span>$0.00</span></div>
-                <hr className="border-slate-600 my-2"/>
-                <div className="flex justify-between text-xl font-bold text-white">
-                  <span>Total</span>
-                  <span>${order.total.toFixed(2)}</span>
+                <div className="text-right">
+                  <span className="text-xs text-[#9ea8a1]">Recorded Date</span>
+                  <p className="text-sm font-medium text-[#f4efe6]">{order.date || 'Today'}</p>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-700/50 border-slate-600">
-              <CardHeader><CardTitle className="text-lg text-sky-300">Update Status</CardTitle></CardHeader>
-              <CardContent>
-                {isEditingStatus ? (
-                  <div className="space-y-3">
-                    <Select value={currentStatus} onValueChange={setCurrentStatus}>
-                      <SelectTrigger className="w-full bg-slate-600 border-slate-500 text-white">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-700 border-slate-600 text-white">
-                        {orderStatuses.map(status => (
-                          <SelectItem key={status} value={status} className="hover:bg-sky-600/50 focus:bg-sky-500">{status}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button onClick={handleStatusUpdate} size="sm" className="flex-1 bg-sky-500 hover:bg-sky-600 text-white">Save</Button>
-                      <Button onClick={() => { setIsEditingStatus(false); setCurrentStatus(order.status); }} size="sm" variant="outline" className="flex-1 text-gray-300 border-slate-500 hover:bg-slate-600">Cancel</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-xs uppercase tracking-wider font-semibold text-[#c5a059]">Items Ordered</h3>
+              <div className="space-y-2">
+                {order.items && order.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 rounded-lg bg-[#111a14] border border-[#243328] text-xs">
+                    <div>
+                      <span className="font-medium text-[#f4efe6]">{item.productName || 'Catalog Item'}</span>
+                      <p className="text-[11px] text-[#9ea8a1]">Qty: {item.quantity} × ${Number(item.unitPrice || 0).toFixed(2)}</p>
                     </div>
+                    <span className="font-serif text-[#c5a059] font-semibold">
+                      ${(Number(item.quantity || 0) * Number(item.unitPrice || 0)).toFixed(2)}
+                    </span>
                   </div>
-                ) : (
-                  <Button onClick={() => setIsEditingStatus(true)} variant="outline" className="w-full text-yellow-400 border-yellow-500 hover:bg-yellow-500/10">
-                    <Edit3 className="mr-2 h-4 w-4" /> Change Status
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+              {order.notes && (
+                <div className="p-3.5 rounded-lg bg-[#111a14] border border-[#243328] text-xs text-[#9ea8a1]">
+                  <span className="text-[#c5a059] font-medium block mb-1">Notes:</span>
+                  {order.notes}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="md:col-span-1 space-y-6">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+            <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+              <CardTitle className="text-base font-serif text-[#f8f6f0]">Client Information</CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 space-y-3 text-xs text-[#d8d3c5]">
+              <div>
+                <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Account</span>
+                <span className="font-medium text-[#f8f6f0]">{order.customerName}</span>
+              </div>
+              <div>
+                <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Email</span>
+                <span className="text-[#c5a059]">{order.customerEmail}</span>
+              </div>
+              <div>
+                <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Destination</span>
+                <span className="text-[#e5dec9]">{order.shippingAddress}</span>
+              </div>
+              <hr className="border-[#202f25] my-2" />
+              <div className="flex justify-between items-center text-sm font-serif">
+                <span className="text-[#f8f6f0] font-semibold">Total:</span>
+                <span className="text-[#c5a059] font-bold text-lg">${Number(order.total || 0).toFixed(2)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </motion.div>
   );
 };
 
 export default OrderDetailsPage;
-  

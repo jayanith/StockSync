@@ -1,82 +1,28 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { motion } from 'framer-motion';
-import { Users, PlusCircle, Edit, Trash2, Search, Filter, ShieldCheck, UserCog, User as UserIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
+import { Users, PlusCircle, Search, Mail, Shield, UserCheck, Trash2, Eye } from 'lucide-react';
+import { getUsers, deleteUser } from '@/lib/api';
 
 const UsersPage = () => {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
   const { toast } = useToast();
 
-  // Map backend roles to frontend display roles
-  const roleMapping = {
-    'admin': 'Admin',
-    'manager': 'Manager',
-    'employee': 'Employee'
-  };
-  
-  const userRoles = ["Admin", "Manager", "Employee"];
-
-  // Fetch users from the backend API
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication required');
+      const res = await getUsers();
+      if (res && res.data) {
+        setUsers(res.data);
       }
-
-      const response = await fetch('http://localhost:5000/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      const data = await response.json();
-      
-      // Transform the data to match the expected format
-      const formattedUsers = data.data.map(user => ({
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: roleMapping[user.role] || user.role,
-        lastLogin: user.updatedAt ? new Date(user.updatedAt).toLocaleString() : 'Never',
-        status: 'Active'
-      }));
-      
-      setUsers(formattedUsers);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Could not fetch users. Make sure you're logged in as admin.",
-        variant: "destructive"
-      });
-      // Fallback to empty array if fetch fails
-      setUsers([]);
+    } catch (e) {
+      console.error('Error fetching users:', e);
     } finally {
       setIsLoading(false);
     }
@@ -86,184 +32,139 @@ const UsersPage = () => {
     fetchUsers();
   }, []);
 
-  const handleDeleteUser = async (userId) => {
+  const handleDelete = async (id) => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
-
-      // Update the local state after successful deletion
-      const updatedUsers = users.filter(u => u.id !== userId);
-      setUsers(updatedUsers);
-      
-      toast({
-        title: "User Deleted",
-        description: "User has been removed successfully.",
-      });
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Could not delete user.",
-        variant: "destructive"
-      });
+      await deleteUser(id);
+      setUsers(prev => prev.filter(u => (u.id || u._id) !== id));
+      toast({ title: "User Removed", description: "User account deleted from database." });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to delete user.", variant: "destructive" });
     }
   };
 
-  const getRoleIcon = (role) => {
-    if (role === 'Admin') return <ShieldCheck className="h-5 w-5 text-red-400" />;
-    if (role === 'Manager') return <UserCog className="h-5 w-5 text-sky-400" />;
-    if (role === 'Warehouse Staff') return <UserIcon className="h-5 w-5 text-yellow-400" />;
-    return <UserIcon className="h-5 w-5 text-green-400" />;
+  const getRoleBadge = (role) => {
+    const r = (role || '').toLowerCase();
+    if (r.includes('admin')) return 'bg-[#332612] text-[#fde047] border-[#55401e]';
+    if (r.includes('manager')) return 'bg-[#182833] text-[#7dd3fc] border-[#224458]';
+    if (r.includes('staff')) return 'bg-[#173022] text-[#6ee7b7] border-[#225039]';
+    return 'bg-[#253028] text-[#d1d5db] border-[#37473c]';
   };
-  
-  const filteredUsers = users.filter(user => {
-    const matchesSearchTerm = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearchTerm && matchesRole;
-  });
 
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Users className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
+  const filtered = users.filter(u => {
+    const name = u.name || '';
+    const email = u.email || '';
+    const role = u.role || '';
+    return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           role.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="space-y-6 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <Users className="mr-3 h-8 w-8" /> User Management
-        </h1>
-        <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-          <PlusCircle className="mr-2 h-5 w-5" /> Add New User
-        </Button>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6 old-money-card border-[#2e4034] rounded-xl shadow-xl">
+        <div>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Access Control</span>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#f8f6f0] mt-1 flex items-center">
+            <Users className="mr-3 h-7 w-7 text-[#c5a059]" /> System Users & Roles
+          </h1>
+          <p className="text-xs text-[#9ea8a1] mt-0.5">Admin, Manager, Staff, and Client credential management</p>
+        </div>
+        <Link to="/users/new">
+          <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4 shadow-lg">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add User Account
+          </Button>
+        </Link>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Filter & Search Users</CardTitle>
-          <div className="flex flex-col md:flex-row gap-4 pt-4">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input 
-                type="text"
-                placeholder="Search by Name or Email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
-              />
-            </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full md:w-[200px] bg-slate-700 border-slate-600 text-white focus:ring-sky-500">
-                <Filter className="mr-2 h-4 w-4 text-gray-400" />
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                <SelectItem value="all" className="hover:bg-sky-700/50 focus:bg-sky-600">All Roles</SelectItem>
-                {userRoles.map(role => (
-                  <SelectItem key={role} value={role} className="hover:bg-sky-700/50 focus:bg-sky-600">{role}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <Card className="old-money-card border-[#2e4034] rounded-xl">
+        <CardHeader className="p-5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
+            <Input 
+              type="text"
+              placeholder="Search by full name, email, or role..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11"
+            />
           </div>
         </CardHeader>
       </Card>
 
-      {filteredUsers.length > 0 ? (
-        <div className="overflow-x-auto bg-slate-800/70 border border-slate-700 rounded-lg shadow-md">
-          <table className="w-full text-sm text-left text-gray-300">
-            <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
-              <tr>
-                <th scope="col" className="px-6 py-3">Name</th>
-                <th scope="col" className="px-6 py-3">Email</th>
-                <th scope="col" className="px-6 py-3">Role</th>
-                <th scope="col" className="px-6 py-3">Last Login</th>
-                <th scope="col" className="px-6 py-3 text-center">Status</th>
-                <th scope="col" className="px-6 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user, index) => (
-                <motion.tr
-                  key={user.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="border-b border-slate-700 hover:bg-slate-700/30"
-                >
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{user.name}</td>
-                  <td className="px-6 py-4">{user.email}</td>
-                  <td className="px-6 py-4 flex items-center">{getRoleIcon(user.role)}<span className="ml-2">{user.role}</span></td>
-                  <td className="px-6 py-4">{user.lastLogin}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${user.status === 'Active' ? 'bg-green-600/30 text-green-300' : 'bg-gray-600/30 text-gray-400'}`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center space-x-1">
-                    <Link to={`/users/${user.id}`}>
-                      <Button variant="ghost" size="icon" className="text-sky-400 hover:text-sky-300 hover:bg-sky-900/30 h-8 w-8">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300 hover:bg-red-900/30 h-8 w-8">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-slate-800 border-slate-700 text-gray-200">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-red-400">Confirm Deletion</AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-400">
-                            Are you sure you want to delete user "{user.name}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="text-gray-300 border-slate-600 hover:bg-slate-700">Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Users className="h-10 w-10 animate-spin text-[#c5a059]" />
         </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-        >
-          <Users className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-          <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Users Found</h2>
-          <p className="text-gray-400 mb-6">
-            {searchTerm || roleFilter !== 'all' ? 'No users match your current filters.' : 'There are no users to display.'}
-          </p>
-        </motion.div>
+        <Card className="old-money-card border-[#2e4034] rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-[#d8d3c5]">
+              <thead className="text-[11px] uppercase tracking-wider text-[#9ea8a1] bg-[#121b16] border-b border-[#202f25]">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">User Name</th>
+                  <th className="px-6 py-4 font-semibold">Email / Login ID</th>
+                  <th className="px-6 py-4 font-semibold">Assigned Role</th>
+                  <th className="px-6 py-4 font-semibold">Account Status</th>
+                  <th className="px-6 py-4 text-center font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1b2820]">
+                {filtered.length > 0 ? (
+                  filtered.map((user, idx) => {
+                    const uid = user.id || user._id || idx + 1;
+                    return (
+                      <tr key={uid} className="hover:bg-[#16211a]/70 transition-colors">
+                        <td className="px-6 py-4 font-medium text-[#f8f6f0]">{user.name}</td>
+                        <td className="px-6 py-4 font-mono text-[#c5a059]">{user.email}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getRoleBadge(user.role)}`}>
+                            {user.role || 'Customer'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-[#6ee7b7] font-medium flex items-center gap-1 text-[11px]">
+                            <UserCheck className="h-3 w-3" /> {user.status || 'Active'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex justify-center gap-2">
+                            <Link to={`/users/${uid}`}>
+                              <Button variant="ghost" size="sm" className="h-8 text-xs text-[#c5a059] hover:bg-[#1f2e25] hover:text-[#f8f6f0]">
+                                <Eye className="h-3.5 w-3.5 mr-1" /> Profile
+                              </Button>
+                            </Link>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDelete(uid)} 
+                              className="h-8 text-xs text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="text-center py-12 text-[#9ea8a1]">
+                      No user accounts found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </motion.div>
   );
 };
 
 export default UsersPage;
-  

@@ -1,257 +1,226 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building, PlusCircle, Edit, Trash2, Search, MapPin, Package } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger
-} from "@/components/ui/dialog.jsx";
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
-import { cn } from '@/lib/utils';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
+import { Building, PlusCircle, Search, MapPin, Phone, Mail, User, Eye, Trash2, ArrowRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { getWarehouses, createWarehouse, deleteWarehouse } from '@/lib/api';
 
 const WarehousesPage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingWarehouse, setEditingWarehouse] = useState(null);
-  const [warehouseName, setWarehouseName] = useState('');
-  const [warehouseLocation, setWarehouseLocation] = useState('');
-  const [warehouseCapacity, setWarehouseCapacity] = useState('');
-  const [errors, setErrors] = useState({});
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
+  const [address, setAddress] = useState('');
+  const [capacity, setCapacity] = useState('5000');
+  const [manager, setManager] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const { toast } = useToast();
 
-  const mockWarehouses = [
-    { id: 'wh1', name: 'Main Warehouse', location: '123 Industrial Rd, Anytown', capacity: 10000, currentStockItems: 5670 },
-    { id: 'wh2', name: 'Downtown Hub', location: '45 Market St, Anytown', capacity: 2000, currentStockItems: 1500 },
-    { id: 'wh3', name: 'North Depot', location: '789 North Ave, Anytown', capacity: 5000, currentStockItems: 3200 },
-  ];
+  const fetchWarehouses = async () => {
+    setIsLoading(true);
+    try {
+      const res = await getWarehouses();
+      if (res && res.data) {
+        setWarehouses(res.data);
+      }
+    } catch (e) {
+      console.error('Error fetching warehouses:', e);
+      toast({ title: 'Notice', description: 'Failed to load warehouses from database.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setIsLoading(true);
-    const storedWarehouses = JSON.parse(localStorage.getItem('inventoryWarehouses')) || mockWarehouses;
-    setWarehouses(storedWarehouses);
-    setIsLoading(false);
-    if (!localStorage.getItem('inventoryWarehouses')) {
-      localStorage.setItem('inventoryWarehouses', JSON.stringify(mockWarehouses));
-    }
+    fetchWarehouses();
   }, []);
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!warehouseName.trim()) newErrors.warehouseName = 'Warehouse name is required.';
-    if (!warehouseLocation.trim()) newErrors.warehouseLocation = 'Location is required.';
-    if (warehouseCapacity && (isNaN(parseInt(warehouseCapacity)) || parseInt(warehouseCapacity) <=0)) newErrors.warehouseCapacity = 'Valid capacity is required.';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleAddOrUpdateWarehouse = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
-    if(!validateForm()) {
-      toast({ title: "Validation Error", description: "Please fill required fields correctly.", variant: "destructive" });
+    if (!name.trim() || !location.trim()) {
+      toast({ title: "Validation Error", description: "Warehouse name and location are required.", variant: "destructive" });
       return;
     }
-    let updatedWarehouses;
-    if (editingWarehouse) {
-      updatedWarehouses = warehouses.map(wh => wh.id === editingWarehouse.id ? { ...wh, name: warehouseName, location: warehouseLocation, capacity: parseInt(warehouseCapacity) || 0 } : wh);
-      toast({ title: "Warehouse Updated", description: `Warehouse "${warehouseName}" updated.` });
-    } else {
-      const newWarehouse = {
-        id: `wh${Date.now()}`,
-        name: warehouseName,
-        location: warehouseLocation,
-        capacity: parseInt(warehouseCapacity) || 0,
-        currentStockItems: 0,
-      };
-      updatedWarehouses = [...warehouses, newWarehouse];
-      toast({ title: "Warehouse Added", description: `Warehouse "${warehouseName}" added.` });
+
+    try {
+      await createWarehouse({
+        name: name.trim(),
+        location: location.trim(),
+        address: address.trim() || undefined,
+        capacity: parseInt(capacity) || 5000,
+        manager: manager.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        status: 'Active'
+      });
+
+      toast({ title: "Warehouse Created", description: `${name} saved to MySQL database.` });
+      setIsCreateOpen(false);
+      setName('');
+      setLocation('');
+      setAddress('');
+      fetchWarehouses();
+    } catch (err) {
+      toast({ title: "Error", description: err.message || "Failed to create warehouse.", variant: "destructive" });
     }
-    setWarehouses(updatedWarehouses);
-    localStorage.setItem('inventoryWarehouses', JSON.stringify(updatedWarehouses));
-    resetForm();
   };
 
-  const handleEdit = (warehouse) => {
-    setEditingWarehouse(warehouse);
-    setWarehouseName(warehouse.name);
-    setWarehouseLocation(warehouse.location);
-    setWarehouseCapacity(warehouse.capacity.toString());
-    setErrors({});
-    setIsFormOpen(true);
+  const handleDelete = async (id) => {
+    try {
+      await deleteWarehouse(id);
+      setWarehouses(prev => prev.filter(w => (w.id || w._id) !== id));
+      toast({ title: "Warehouse Removed", description: "Warehouse deleted from database." });
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to delete warehouse.", variant: "destructive" });
+    }
   };
 
-  const handleDelete = (warehouseId) => {
-    const updatedWarehouses = warehouses.filter(wh => wh.id !== warehouseId);
-    setWarehouses(updatedWarehouses);
-    localStorage.setItem('inventoryWarehouses', JSON.stringify(updatedWarehouses));
-    toast({ title: "Warehouse Deleted", description: "Warehouse has been removed.", variant: "destructive" });
-  };
-
-  const resetForm = () => {
-    setEditingWarehouse(null);
-    setWarehouseName('');
-    setWarehouseLocation('');
-    setWarehouseCapacity('');
-    setErrors({});
-    setIsFormOpen(false);
-  };
-
-  const filteredWarehouses = warehouses.filter(wh => 
-    wh.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wh.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Building className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
+  const filtered = warehouses.filter(w => {
+    const wName = w.name || '';
+    const wLoc = w.location || '';
+    return wName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           wLoc.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="space-y-6 max-w-7xl mx-auto"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <Building className="mr-3 h-8 w-8" /> Manage Warehouses
-        </h1>
-        <Dialog open={isFormOpen} onOpenChange={(isOpen) => { setIsFormOpen(isOpen); if (!isOpen) resetForm(); }}>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-6 old-money-card border-[#2e4034] rounded-xl shadow-xl">
+        <div>
+          <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Vaults & Hubs</span>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#f8f6f0] mt-1 flex items-center">
+            <Building className="mr-3 h-7 w-7 text-[#c5a059]" /> Storage Warehouses
+          </h1>
+          <p className="text-xs text-[#9ea8a1] mt-0.5">Secure depositories, vaults, and regional logistics fulfillment hubs</p>
+        </div>
+
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-              <PlusCircle className="mr-2 h-5 w-5" /> {editingWarehouse ? 'Edit Warehouse' : 'Add New Warehouse'}
+            <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4 shadow-lg">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Vault / Depot
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-slate-800 border-slate-700 text-gray-200">
+          <DialogContent className="bg-[#111914] border-[#36493e] text-[#f4efe6] max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-sky-400">{editingWarehouse ? 'Edit Warehouse' : 'Add New Warehouse'}</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                {editingWarehouse ? 'Update warehouse details.' : 'Enter details for the new warehouse.'}
-              </DialogDescription>
+              <DialogTitle className="font-serif text-xl text-[#f8f6f0]">Register New Warehouse</DialogTitle>
+              <DialogDescription className="text-xs text-[#9ea8a1]">Enter facility and storage capacity details.</DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAddOrUpdateWarehouse} className="grid gap-4 py-4">
+            <form onSubmit={handleCreate} className="space-y-3 pt-2">
               <div>
-                <Label htmlFor="warehouseName" className={cn("text-gray-300", errors.warehouseName && "text-red-400")}>Name*</Label>
-                <Input id="warehouseName" value={warehouseName} onChange={(e) => setWarehouseName(e.target.value)} className={cn("bg-slate-700 border-slate-600", errors.warehouseName && "border-red-500")} />
-                {errors.warehouseName && <p className="text-xs text-red-400 mt-1">{errors.warehouseName}</p>}
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059]">Facility Name *</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mayfair Vault & Depository" className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6]" />
               </div>
               <div>
-                <Label htmlFor="warehouseLocation" className={cn("text-gray-300", errors.warehouseLocation && "text-red-400")}>Location*</Label>
-                <Input id="warehouseLocation" value={warehouseLocation} onChange={(e) => setWarehouseLocation(e.target.value)} className={cn("bg-slate-700 border-slate-600", errors.warehouseLocation && "border-red-500")} />
-                {errors.warehouseLocation && <p className="text-xs text-red-400 mt-1">{errors.warehouseLocation}</p>}
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059]">Location / Region *</Label>
+                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. London, Mayfair" className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6]" />
               </div>
               <div>
-                <Label htmlFor="warehouseCapacity" className={cn("text-gray-300", errors.warehouseCapacity && "text-red-400")}>Capacity (Units)</Label>
-                <Input id="warehouseCapacity" type="number" value={warehouseCapacity} onChange={(e) => setWarehouseCapacity(e.target.value)} className={cn("bg-slate-700 border-slate-600", errors.warehouseCapacity && "border-red-500")} />
-                {errors.warehouseCapacity && <p className="text-xs text-red-400 mt-1">{errors.warehouseCapacity}</p>}
+                <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Street Address</Label>
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="22 Berkeley Square" className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6]" />
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={resetForm} className="text-gray-300 border-slate-600 hover:bg-slate-700">Cancel</Button>
-                <Button type="submit" className="bg-sky-500 hover:bg-sky-600 text-white">{editingWarehouse ? 'Save Changes' : 'Add Warehouse'}</Button>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Capacity (Units)</Label>
+                  <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6]" />
+                </div>
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-[#9ea8a1]">Manager Name</Label>
+                  <Input value={manager} onChange={(e) => setManager(e.target.value)} placeholder="Edward Kensington" className="mt-1 bg-[#141f18] border-[#2c3d32] text-[#f4efe6]" />
+                </div>
+              </div>
+              <DialogFooter className="pt-4 border-t border-[#202f25]">
+                <Button type="submit" className="old-money-gold-btn text-xs uppercase tracking-wider w-full">
+                  Save Warehouse
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Search Warehouses</CardTitle>
-          <div className="relative pt-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 mt-2" />
+      <Card className="old-money-card border-[#2e4034] rounded-xl">
+        <CardHeader className="p-5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
             <Input 
               type="text"
-              placeholder="Search by name or location..."
+              placeholder="Search warehouses by facility name or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
+              className="pl-10 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] text-xs h-11"
             />
           </div>
         </CardHeader>
       </Card>
 
-      <AnimatePresence>
-        {filteredWarehouses.length > 0 ? (
-          <div className="grid md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredWarehouses.map((wh, index) => (
-              <motion.div
-                key={wh.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-              >
-                <Card className="bg-slate-800/70 border-slate-700 hover:shadow-sky-500/20 transition-shadow duration-300 flex flex-col h-full">
-                  <CardHeader>
-                    <CardTitle className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-400">{wh.name}</CardTitle>
-                    <CardDescription className="text-gray-400 pt-1 flex items-center"><MapPin className="mr-2 h-4 w-4 text-gray-500" />{wh.location}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex-grow space-y-2">
-                    <p className="text-sm text-gray-300">Capacity: <span className="font-semibold text-sky-300">{wh.capacity.toLocaleString()} units</span></p>
-                    <p className="text-sm text-gray-300">Current Stock: <span className="font-semibold text-sky-300">{wh.currentStockItems.toLocaleString()} items</span></p>
-                  </CardContent>
-                  <CardFooter className="pt-4 border-t border-slate-700 flex justify-end space-x-2">
-                    <Link to={`/inventory/warehouses/${wh.id}`}>
-                      <Button variant="outline" size="sm" className="text-sky-400 border-sky-500 hover:bg-sky-500/10">
-                        <Package className="mr-1 h-4 w-4" /> View Stock
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Building className="h-10 w-10 animate-spin text-[#c5a059]" />
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.length > 0 ? (
+            filtered.map((w, idx) => {
+              const wid = w.id || w._id || idx + 1;
+              return (
+                <Card key={wid} className="old-money-card border-[#2c3e33] hover:border-[#c5a059]/60 transition-all rounded-xl p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-serif font-semibold text-lg text-[#f8f6f0]">{w.name}</h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-[#16291f] text-[#6ee7b7] border border-[#2c4435]">
+                        {w.status || 'Active'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#c5a059] font-medium mb-3 flex items-center">
+                      <MapPin className="h-3.5 w-3.5 mr-1" /> {w.location}
+                    </p>
+                    <div className="space-y-1.5 text-xs text-[#9ea8a1]">
+                      {w.address && <p className="truncate">Address: {w.address}</p>}
+                      <p>Capacity: <span className="text-[#f4efe6] font-semibold">{w.capacity || 5000}</span> storage units</p>
+                      {w.manager && <p>Manager: <span className="text-[#e5dec9]">{w.manager}</span></p>}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-[#1e2c22] mt-4 flex justify-between items-center">
+                    <Link to={`/inventory/warehouses/${wid}`}>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs text-[#c5a059] hover:bg-[#1a271f] hover:text-[#f8f6f0]">
+                        <Eye className="h-3.5 w-3.5 mr-1" /> Inspect Vault
                       </Button>
                     </Link>
-                     <Button onClick={() => handleEdit(wh)} variant="ghost" size="icon" className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/30 h-8 w-8">
-                        <Edit className="h-4 w-4" />
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleDelete(wid)} 
+                      className="h-8 text-xs text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon" className="bg-red-600/80 hover:bg-red-600 text-white h-8 w-8">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-slate-800 border-slate-700 text-gray-200">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-red-400">Confirm Deletion</AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-400">
-                            Are you sure you want to delete warehouse "{wh.name}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="text-gray-300 border-slate-600 hover:bg-slate-700">Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(wh.id)} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </CardFooter>
+                  </div>
                 </Card>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-          >
-            <Building className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-            <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Warehouses Found</h2>
-            <p className="text-gray-400 mb-6">
-              {searchTerm ? 'No warehouses match your search.' : 'Your warehouse list is empty.'}
-            </p>
-            <Button onClick={() => setIsFormOpen(true)} className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg">
-              <PlusCircle className="mr-2 h-5 w-5" /> Add First Warehouse
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              );
+            })
+          ) : (
+            <div className="col-span-3 text-center py-16 old-money-card border-[#2e4034] rounded-xl">
+              <Building className="h-12 w-12 text-[#c5a059] mx-auto mb-3 opacity-80" />
+              <p className="text-xs text-[#9ea8a1]">No warehouses logged in MySQL.</p>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 };
 
 export default WarehousesPage;
-  

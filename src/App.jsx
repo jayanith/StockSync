@@ -55,15 +55,18 @@ import NotFoundPage from '@/pages/NotFoundPage';
 function App() {
   const { currentUser, loading } = useAuth();
   
-  // Check for token in localStorage directly to prevent redirect flicker on reload
+  // Requires both a stored token AND React state to be populated.
+  // This prevents the logout->redirect loop where token is removed but state hasn't cleared yet.
   const hasToken = localStorage.getItem('authToken') !== null;
-  const isAuthenticated = !!currentUser || hasToken;
+  const isAuthenticated = !!currentUser && hasToken;
   
-  // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-[#0d110f]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#c5a059]"></div>
+          <span className="text-xs text-[#9e9a8f] uppercase tracking-widest">Authenticating...</span>
+        </div>
       </div>
     );
   }

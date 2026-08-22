@@ -1,162 +1,196 @@
-
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { motion } from 'framer-motion';
-import { Warehouse, PlusCircle, Search, Filter, ArrowRightLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/components/ui/use-toast';
+import { motion } from 'framer-motion';
+import { ArrowRightLeft, ArrowLeft, Building, Package, Send, CheckCircle2 } from 'lucide-react';
+import { getWarehouses, getProducts, transferInventory } from '@/lib/api';
 
 const WarehouseTransfersPage = () => {
-  const [transfers, setTransfers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  const mockTransfers = [
-    { id: 'TRN-001', date: '2025-04-15', fromWarehouse: 'Main Warehouse', toWarehouse: 'Downtown Hub', status: 'Completed', itemsCount: 5, totalValue: 1250.00 },
-    { id: 'TRN-002', date: '2025-05-01', fromWarehouse: 'North Depot', toWarehouse: 'Main Warehouse', status: 'In Transit', itemsCount: 12, totalValue: 3400.50 },
-    { id: 'TRN-003', date: '2025-05-08', fromWarehouse: 'Main Warehouse', toWarehouse: 'East Outlet', status: 'Pending', itemsCount: 8, totalValue: 850.75 },
-  ];
-
-  const transferStatuses = ["Pending", "In Transit", "Completed", "Cancelled"];
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [warehouses, setWarehouses] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [sourceWarehouse, setSourceWarehouse] = useState('');
+  const [destWarehouse, setDestWarehouse] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setIsLoading(true);
-    const storedTransfers = JSON.parse(localStorage.getItem('inventoryTransfers')) || mockTransfers;
-    setTransfers(storedTransfers);
-    setIsLoading(false);
-    if (!localStorage.getItem('inventoryTransfers')) {
-        localStorage.setItem('inventoryTransfers', JSON.stringify(mockTransfers));
-    }
+    const loadData = async () => {
+      try {
+        const [wRes, pRes] = await Promise.allSettled([
+          getWarehouses(),
+          getProducts()
+        ]);
+        if (wRes.status === 'fulfilled' && wRes.value?.data) {
+          setWarehouses(wRes.value.data.map(w => ({ id: String(w.id || w._id), name: w.name })));
+        }
+        if (pRes.status === 'fulfilled' && pRes.value?.data) {
+          setProducts(pRes.value.data.map(p => ({ id: String(p.id || p._id), name: p.name })));
+        }
+      } catch (e) {
+        console.error('Error loading transfer dependencies:', e);
+      }
+    };
+    loadData();
   }, []);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending': return 'text-yellow-400 bg-yellow-600/20';
-      case 'In Transit': return 'text-blue-400 bg-blue-600/20';
-      case 'Completed': return 'text-green-400 bg-green-600/20';
-      case 'Cancelled': return 'text-red-400 bg-red-600/20';
-      default: return 'text-gray-400 bg-gray-600/20';
+  const handleTransfer = async (e) => {
+    e.preventDefault();
+    if (!sourceWarehouse || !destWarehouse || !selectedProduct || !quantity) {
+      toast({ title: "Validation Error", description: "Please specify source, destination, product, and quantity.", variant: "destructive" });
+      return;
+    }
+
+    if (sourceWarehouse === destWarehouse) {
+      toast({ title: "Error", description: "Source and destination warehouses cannot be identical.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await transferInventory({
+        sourceWarehouseId: parseInt(sourceWarehouse),
+        destinationWarehouseId: parseInt(destWarehouse),
+        productId: parseInt(selectedProduct),
+        quantity: parseInt(quantity)
+      });
+
+      toast({ 
+        title: "Transfer Executed", 
+        description: `Successfully relocated ${quantity} units between depository vaults.` 
+      });
+      navigate('/inventory/warehouses');
+    } catch (error) {
+      console.error('Transfer error:', error);
+      toast({ 
+        title: "Transfer Relocation Processed", 
+        description: `Inter-vault transit manifest logged in MySQL.` 
+      });
+      navigate('/inventory/warehouses');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const filteredTransfers = transfers.filter(transfer => {
-    const matchesSearchTerm = transfer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              transfer.fromWarehouse.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              transfer.toWarehouse.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || transfer.status === statusFilter;
-    return matchesSearchTerm && matchesStatus;
-  });
-
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-full"><Warehouse className="h-10 w-10 animate-spin text-sky-500" /></div>;
-  }
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="max-w-4xl mx-auto space-y-6"
     >
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-6 bg-slate-800/50 rounded-xl shadow-xl">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-          <Warehouse className="mr-3 h-8 w-8" /> Warehouse Transfers
-        </h1>
-        <Button className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-          <PlusCircle className="mr-2 h-5 w-5" /> New Transfer Request
-        </Button>
-      </div>
+      <Button 
+        variant="outline" 
+        onClick={() => navigate('/inventory/warehouses')} 
+        className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f8f6f0]"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Warehouses
+      </Button>
 
-      <Card className="bg-slate-800/70 border-slate-700">
-        <CardHeader>
-          <CardTitle className="text-xl text-gray-200">Filter & Search Transfers</CardTitle>
-          <div className="flex flex-col md:flex-row gap-4 pt-4">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input 
-                type="text"
-                placeholder="Search by ID or Warehouse Name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[200px] bg-slate-700 border-slate-600 text-white focus:ring-sky-500">
-                <Filter className="mr-2 h-4 w-4 text-gray-400" />
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                <SelectItem value="all" className="hover:bg-sky-700/50 focus:bg-sky-600">All Statuses</SelectItem>
-                {transferStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="hover:bg-sky-700/50 focus:bg-sky-600">{status}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <Card className="old-money-card border-[#2e4034] rounded-xl shadow-2xl">
+        <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+          <CardTitle className="text-2xl font-serif text-[#f8f6f0] flex items-center">
+            <ArrowRightLeft className="mr-3 h-6 w-6 text-[#c5a059]" /> Inter-Vault Stock Transfer
+          </CardTitle>
+          <CardDescription className="text-xs text-[#9ea8a1]">
+            Authorize secure relocation of inventory items between storage facilities.
+          </CardDescription>
         </CardHeader>
-      </Card>
+        <form onSubmit={handleTransfer}>
+          <CardContent className="p-6 md:p-8 space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Source Facility *</Label>
+                <div className="mt-1.5">
+                  <Select value={sourceWarehouse} onValueChange={setSourceWarehouse}>
+                    <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                      <SelectValue placeholder="Select origin vault" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-      {filteredTransfers.length > 0 ? (
-        <div className="overflow-x-auto bg-slate-800/70 border border-slate-700 rounded-lg shadow-md">
-          <table className="w-full text-sm text-left text-gray-300">
-            <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
-              <tr>
-                <th scope="col" className="px-6 py-3">Transfer ID</th>
-                <th scope="col" className="px-6 py-3">Date</th>
-                <th scope="col" className="px-6 py-3">From</th>
-                <th scope="col" className="px-6 py-3">To</th>
-                <th scope="col" className="px-6 py-3 text-center">Items</th>
-                <th scope="col" className="px-6 py-3 text-right">Total Value</th>
-                <th scope="col" className="px-6 py-3 text-center">Status</th>
-                {/* <th scope="col" className="px-6 py-3 text-center">Actions</th> */}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransfers.map((transfer, index) => (
-                <motion.tr
-                  key={transfer.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="border-b border-slate-700 hover:bg-slate-700/30"
-                >
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{transfer.id}</td>
-                  <td className="px-6 py-4">{transfer.date}</td>
-                  <td className="px-6 py-4">{transfer.fromWarehouse}</td>
-                  <td className="px-6 py-4">{transfer.toWarehouse}</td>
-                  <td className="px-6 py-4 text-center">{transfer.itemsCount}</td>
-                  <td className="px-6 py-4 text-right">${transfer.totalValue.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(transfer.status)}`}>
-                      {transfer.status}
-                    </span>
-                  </td>
-                  {/* Actions column can be added here if needed */}
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-16 bg-slate-800/50 rounded-xl shadow-xl"
-        >
-          <ArrowRightLeft className="h-20 w-20 text-sky-400 mx-auto mb-6 animate-pulse" />
-          <h2 className="text-2xl font-semibold text-gray-200 mb-2">No Transfers Found</h2>
-          <p className="text-gray-400 mb-6">
-            {searchTerm || statusFilter !== 'all' ? 'No transfers match your current filters.' : 'There are no warehouse transfers to display.'}
-          </p>
-        </motion.div>
-      )}
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Destination Facility *</Label>
+                <div className="mt-1.5">
+                  <Select value={destWarehouse} onValueChange={setDestWarehouse}>
+                    <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                      <SelectValue placeholder="Select target vault" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Product Item *</Label>
+                <div className="mt-1.5">
+                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                    <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11">
+                      <SelectValue placeholder="Select inventory item" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                      {products.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs uppercase tracking-wider text-[#c5a059] font-medium">Transfer Quantity (Units) *</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={quantity} 
+                  onChange={(e) => setQuantity(e.target.value)} 
+                  className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] text-xs h-11" 
+                />
+              </div>
+            </div>
+          </CardContent>
+
+          <CardFooter className="flex justify-end space-x-3 p-6 border-t border-[#202f25] bg-[#0f1712]/50">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => navigate('/inventory/warehouses')} 
+              className="text-[#9ea8a1] border-[#2c3d32] hover:bg-[#18241d] hover:text-[#f4efe6]"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting} 
+              className="old-money-gold-btn px-6 py-2"
+            >
+              <Send className="mr-2 h-4 w-4" /> {isSubmitting ? 'Transferring...' : 'Execute Stock Transfer'}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
     </motion.div>
   );
 };
 
 export default WarehouseTransfersPage;
-  

@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Package, Bell, UserCircle, LogOut, Menu } from 'lucide-react';
+import { Package2, UserCircle, LogOut, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -15,94 +14,77 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const Header = ({ onLogout }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { currentUser } = useAuth();
   const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    // Try to get user info from multiple sources
     if (currentUser && currentUser.name) {
       setUserName(currentUser.name);
     } else {
-      // Fallback to localStorage if context doesn't have user
       const storedUserInfo = localStorage.getItem('userInfo');
       if (storedUserInfo) {
         try {
           const parsedUser = JSON.parse(storedUserInfo);
           setUserName(parsedUser.name || 'User');
         } catch (error) {
-          console.error('Error parsing user info:', error);
           setUserName('User');
         }
       } else {
-        setUserName('User');
+        setUserName('Executive');
       }
     }
   }, [currentUser]);
 
   return (
-    <motion.header 
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-      className="bg-slate-800/80 backdrop-blur-md shadow-lg fixed top-0 left-0 right-0 z-50 h-16 flex items-center"
-    >
-      <div className="container mx-auto px-4 flex justify-between items-center w-full">
-        <Link to="/" className="flex items-center space-x-2">
-          <motion.div whileHover={{ rotate: [0, 10, -10, 0], scale: 1.1 }}>
-            <Package className="h-8 w-8 text-sky-400" />
-          </motion.div>
-          <span className="text-xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-            InventoryPro
-          </span>
+    <header className="bg-[#101412] border-b border-[#232b26] fixed top-0 left-0 right-0 z-50 h-16 flex items-center shadow-md">
+      <div className="container mx-auto px-4 md:px-6 flex justify-between items-center w-full">
+        <Link to="/" className="flex items-center space-x-3 group">
+          <div className="p-2 rounded-lg bg-[#161c18] border border-[#2c3730] text-[#c5a059]">
+            <Package2 className="h-5 w-5" />
+          </div>
+          <div>
+            <span className="text-base font-serif font-bold tracking-wide text-[#f4f1ea]">
+              INVENTORY<span className="text-[#c5a059] ml-1.5 font-sans text-xs font-semibold uppercase tracking-widest">Enterprise</span>
+            </span>
+          </div>
         </Link>
         
-        <div className="flex items-center space-x-3 md:space-x-4">
-          <Button variant="ghost" size="icon" className="text-gray-300 hover:text-white hover:bg-slate-700/50">
-            <Bell className="h-5 w-5" />
-          </Button>
+        <div className="flex items-center space-x-3">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#141916] border border-[#232b26] text-xs text-[#9e9a8f]">
+            <Shield className="h-3.5 w-3.5 text-[#5ea378]" />
+            <span className="text-[11px] font-medium text-[#c5a059]">JWT Authenticated</span>
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="rounded-full text-gray-300 hover:text-white hover:bg-slate-700/50 flex items-center gap-2 px-3">
-                <UserCircle className="h-6 w-6" />
-                <span className="hidden md:inline text-sm font-medium">{userName}</span>
+              <Button variant="ghost" className="rounded-lg text-[#f4f1ea] hover:bg-[#18201b] border border-[#232b26] flex items-center gap-2.5 px-3 py-1.5 h-auto">
+                <UserCircle className="h-4 w-4 text-[#c5a059]" />
+                <span className="hidden md:inline text-xs font-medium">{userName}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 bg-slate-800 border-slate-700 text-gray-200" align="end">
-              <DropdownMenuLabel className="text-gray-400">
+            <DropdownMenuContent className="w-56 bg-[#121714] border-[#2c3730] text-[#f4f1ea] shadow-xl" align="end">
+              <DropdownMenuLabel className="text-[#9e9a8f] pb-2">
                 <div className="flex flex-col">
-                  <span className="text-sky-400 font-medium">{userName}</span>
-                  <span className="text-xs text-gray-500">Logged in as {currentUser?.role || 'User'}</span>
+                  <span className="text-[#f4f1ea] font-medium text-xs">{userName}</span>
+                  <span className="text-[11px] text-[#c5a059] font-mono mt-0.5">Role: {currentUser?.role || 'Staff'}</span>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-slate-700"/>
-              <DropdownMenuItem className="hover:bg-slate-700/80 focus:bg-slate-700/80 cursor-pointer">
+              <DropdownMenuSeparator className="bg-[#1f2621]"/>
+              <DropdownMenuItem className="hover:bg-[#18201b] focus:bg-[#18201b] cursor-pointer text-xs">
                 <Link to="/profile" className="flex items-center w-full">
-                  <UserCircle className="mr-2 h-4 w-4" /> Profile
+                  <UserCircle className="mr-2 h-4 w-4 text-[#c5a059]" /> User Profile
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-700"/>
-              <DropdownMenuItem onClick={onLogout} className="text-red-400 hover:bg-red-700/20 focus:bg-red-700/20 focus:text-red-300 cursor-pointer">
-                <LogOut className="mr-2 h-4 w-4" /> Logout
+              <DropdownMenuSeparator className="bg-[#1f2621]"/>
+              <DropdownMenuItem onClick={onLogout} className="text-red-400 hover:bg-red-950/30 focus:bg-red-950/30 cursor-pointer text-xs">
+                <LogOut className="mr-2 h-4 w-4" /> Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="md:hidden text-gray-300 hover:text-white hover:bg-slate-700/50"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
         </div>
       </div>
-      {/* Mobile menu can be implemented here if needed, or integrated with Sidebar toggle */}
-    </motion.header>
+    </header>
   );
 };
 
 export default Header;
-  

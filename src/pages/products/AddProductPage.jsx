@@ -1,17 +1,16 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Will create this component
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { PackagePlus, ArrowLeft, DollarSign, Hash, Layers, ShoppingBag, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { PackagePlus, ArrowLeft, DollarSign, Hash, Layers, Image as ImageIcon, AlertCircle, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getCategories, createProduct } from '@/lib/api';
+import { getCategories, getSuppliers, createProduct } from '@/lib/api';
 
 const AddProductPage = () => {
   const navigate = useNavigate();
@@ -24,79 +23,48 @@ const AddProductPage = () => {
   const [quantity, setQuantity] = useState('');
   const [supplier, setSupplier] = useState('');
   const [description, setDescription] = useState('');
-  const [productImage, setProductImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Function to fetch categories from the backend
-  const fetchCategories = async () => {
-    try {
-      // Check if user is authenticated
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        console.error('No authentication token found');
-        throw new Error('Authentication required');
-      }
-
-      // Directly use fetch with authentication header instead of the helper function
-      const response = await fetch('http://localhost:5000/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch categories: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Categories response:', data); // Debug log
-      
-      if (data && data.data) {
-        // Backend returns { success: true, data: [...] }
-        const formattedCategories = data.data.map(c => ({ 
-          value: c._id, 
-          label: c.name 
-        }));
-        console.log('Formatted categories:', formattedCategories); // Debug log
-        setCategories(formattedCategories);
-      } else {
-        throw new Error('Invalid response format');
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      toast({
-        title: "Error Loading Categories",
-        description: "Could not load categories from the server. Using fallback options.",
-        variant: "destructive"
-      });
-      
-      // Fallback to hardcoded categories if API fails
-      const fallbackCategories = [
-        { value: 'electronics', label: 'Electronics' },
-        { value: 'clothing', label: 'Clothing' },
-        { value: 'books', label: 'Books' },
-        { value: 'furniture', label: 'Furniture' },
-        { value: 'groceries', label: 'Groceries' },
-        { value: 'toys', label: 'Toys' }
-      ];
-      setCategories(fallbackCategories);
-    }
-  };
-
-  // Fetch categories when component mounts
   useEffect(() => {
-    fetchCategories();
-    
-    // Set up an interval to refresh categories every 5 seconds while on this page
-    const intervalId = setInterval(() => {
-      fetchCategories();
-    }, 5000);
-    
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
+    const fetchData = async () => {
+      try {
+        const catRes = await getCategories();
+        if (catRes && catRes.data) {
+          setCategories(catRes.data.map(c => ({
+            value: String(c.id || c._id),
+            label: c.name
+          })));
+        }
+      } catch (err) {
+        console.warn('Using default categories fallback', err);
+        setCategories([
+          { value: '1', label: 'Electronics' },
+          { value: '2', label: 'Clothing' },
+          { value: '3', label: 'Books' },
+          { value: '4', label: 'Furniture' },
+          { value: '5', label: 'Groceries' },
+          { value: '6', label: 'Toys' }
+        ]);
+      }
+
+      try {
+        const supRes = await getSuppliers();
+        if (supRes && supRes.data) {
+          setSuppliers(supRes.data.map(s => ({
+            value: String(s.id || s._id),
+            label: s.name
+          })));
+        }
+      } catch (err) {
+        console.warn('Suppliers fetch failed', err);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const validateForm = () => {
@@ -114,8 +82,11 @@ const AddProductPage = () => {
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setProductImage(file);
-      setImagePreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -126,194 +97,216 @@ const AddProductPage = () => {
       return;
     }
 
-    // Check if user is authenticated
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      toast({ 
-        title: "Authentication Error", 
-        description: "You must be logged in to add products. Please log in and try again.", 
-        variant: "destructive" 
-      });
-      navigate('/login');
-      return;
-    }
+    setIsSubmitting(true);
 
-    // Make sure category is a valid MongoDB ID
-    if (!category || category.length < 12) {
-      toast({ 
-        title: "Invalid Category", 
-        description: "Please select a valid category from the dropdown.", 
-        variant: "destructive" 
-      });
-      return;
-    }
-
-    // Format product data to match the backend model
     const productData = {
-      name: productName,
-      sku,
-      // Only include non-empty fields
-      ...(barcode ? { barcode } : {}),
-      category, // This should be a valid MongoDB ObjectId
+      name: productName.trim(),
+      sku: sku.trim(),
+      barcode: barcode.trim() || undefined,
+      category: category,
       price: parseFloat(price),
       quantity: parseInt(quantity),
-      // Remove supplier field if empty to avoid ObjectId validation errors
-      ...(supplier && supplier.trim() !== '' ? { supplier } : {}),
-      ...(description && description.trim() !== '' ? { description } : {}),
-      // Add images array instead of imageUrl to match the model
-      ...(imagePreview ? { images: [imagePreview] } : {}),
+      supplier: supplier || undefined,
+      description: description.trim() || undefined,
+      images: imagePreview ? [imagePreview] : ["https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=500&auto=format&fit=crop"],
       isActive: true
     };
 
-    console.log('Submitting product data:', productData); // Debug log
-
     try {
-      // Get authentication token
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      // Use direct fetch with authentication header
-      const response = await fetch('http://localhost:5000/api/products', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(productData)
-      });
-
-      const data = await response.json();
-      console.log('Product creation response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create product');
-      }
+      await createProduct(productData);
       
       toast({ 
-        title: "Product Added", 
-        description: `${productName} has been successfully added to inventory.` 
+        title: "Product Added to Inventory", 
+        description: `${productName} has been saved directly to MySQL database.` 
       });
       
-      // Clear form fields
-      setProductName('');
-      setSku('');
-      setBarcode('');
-      setCategory('');
-      setPrice('');
-      setQuantity('');
-      setSupplier('');
-      setDescription('');
-      setProductImage(null);
-      setImagePreview('');
-      
-      // Navigate to products page
       navigate('/products');
     } catch (error) {
       console.error('Error creating product:', error);
-      
-      // More detailed error handling
-      let errorMessage = "Failed to add product. Please try again.";
-      if (error.message.includes("category")) {
-        errorMessage = "Invalid category selected. Please choose a valid category.";
-      } else if (error.message.includes("SKU")) {
-        errorMessage = "This SKU already exists. Please use a unique SKU.";
-      } else if (error.message.includes("authorized") || error.message.includes("token")) {
-        errorMessage = "Authentication error. Please log in again.";
-        // Clear invalid token
-        localStorage.removeItem('authToken');
-        setTimeout(() => navigate('/login'), 1500);
-      }
-      
       toast({
-        title: "Error Adding Product",
-        description: errorMessage,
+        title: "Failed to Add Product",
+        description: error.message || "Could not save to MySQL backend. Please verify your backend is running.",
         variant: "destructive"
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
+      className="max-w-5xl mx-auto space-y-6"
     >
-      <Button variant="outline" onClick={() => navigate(-1)} className="mb-6 text-sky-400 border-sky-500 hover:bg-sky-500/10">
+      <Button 
+        variant="outline" 
+        onClick={() => navigate(-1)} 
+        className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f4efe6] transition-all"
+      >
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Products
       </Button>
 
-      <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent flex items-center">
-            <PackagePlus className="mr-3 h-7 w-7" /> Add New Product
-          </CardTitle>
-          <CardDescription className="text-gray-400">Fill in the details for the new product.</CardDescription>
+      <Card className="old-money-card border-[#36493e] rounded-xl overflow-hidden shadow-2xl">
+        <CardHeader className="border-b border-[#25352c] pb-6 bg-[#0f1712]/70">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 rounded-lg bg-[#1a2920] border border-[#c5a059]/30 text-[#c5a059]">
+              <PackagePlus className="h-6 w-6" />
+            </div>
+            <div>
+              <CardTitle className="text-2xl font-serif tracking-tight text-[#f8f6f0]">
+                Add New Product
+              </CardTitle>
+              <CardDescription className="text-[#9ea8a1]">
+                Catalog a new item in the central database.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
+
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
+          <CardContent className="p-6 md:p-8 space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
               {/* Left Column */}
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="productName" className={cn("text-gray-300", errors.productName && "text-red-400")}>Product Name*</Label>
-                  <Input id="productName" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="e.g., Wireless Keyboard" className={cn("bg-slate-700 border-slate-600", errors.productName && "border-red-500")} />
-                  {errors.productName && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={14} className="mr-1"/>{errors.productName}</p>}
+                  <Label htmlFor="productName" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059]", errors.productName && "text-red-400")}>
+                    Product Name *
+                  </Label>
+                  <Input 
+                    id="productName" 
+                    value={productName} 
+                    onChange={(e) => setProductName(e.target.value)} 
+                    placeholder="e.g. Royal Oak Chronograph" 
+                    className={cn("mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] focus:ring-[#c5a059]", errors.productName && "border-red-500")} 
+                  />
+                  {errors.productName && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={13} className="mr-1"/>{errors.productName}</p>}
                 </div>
+
                 <div>
-                  <Label htmlFor="sku" className={cn("text-gray-300", errors.sku && "text-red-400")}>SKU (Stock Keeping Unit)*</Label>
-                  <Input id="sku" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g., WK-001-BLK" className={cn("bg-slate-700 border-slate-600", errors.sku && "border-red-500")} />
-                  {errors.sku && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={14} className="mr-1"/>{errors.sku}</p>}
+                  <Label htmlFor="sku" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059]", errors.sku && "text-red-400")}>
+                    SKU (Stock Keeping Unit) *
+                  </Label>
+                  <Input 
+                    id="sku" 
+                    value={sku} 
+                    onChange={(e) => setSku(e.target.value)} 
+                    placeholder="e.g. LUX-8802-GOLD" 
+                    className={cn("mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] focus:ring-[#c5a059]", errors.sku && "border-red-500")} 
+                  />
+                  {errors.sku && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={13} className="mr-1"/>{errors.sku}</p>}
                 </div>
-                 <div>
-                  <Label htmlFor="barcode" className="text-gray-300">Barcode (Optional)</Label>
-                  <Input id="barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="e.g., 123456789012" className="bg-slate-700 border-slate-600" />
-                </div>
+
                 <div>
-                  <Label htmlFor="category" className={cn("text-gray-300", errors.category && "text-red-400")}>Category*</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className={cn("w-full bg-slate-700 border-slate-600 text-white", errors.category && "border-red-500")}>
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                      {categories.map(cat => (
-                        <SelectItem key={cat.value} value={cat.value} className="hover:bg-sky-700/50 focus:bg-sky-600">{cat.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.category && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={14} className="mr-1"/>{errors.category}</p>}
+                  <Label htmlFor="barcode" className="text-xs uppercase tracking-wider font-medium text-[#9ea8a1]">
+                    Barcode / EAN (Optional)
+                  </Label>
+                  <Input 
+                    id="barcode" 
+                    value={barcode} 
+                    onChange={(e) => setBarcode(e.target.value)} 
+                    placeholder="e.g. 7350000000000" 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059]" 
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="category" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059]", errors.category && "text-red-400")}>
+                    Category *
+                  </Label>
+                  <div className="mt-1.5">
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger className={cn("w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6]", errors.category && "border-red-500")}>
+                        <SelectValue placeholder="Select an inventory category" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                        {categories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {errors.category && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={13} className="mr-1"/>{errors.category}</p>}
                 </div>
               </div>
 
               {/* Right Column */}
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="price" className={cn("text-gray-300", errors.price && "text-red-400")}>Price ($)*</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input id="price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className={cn("pl-8 bg-slate-700 border-slate-600", errors.price && "border-red-500")} />
+                  <Label htmlFor="price" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059]", errors.price && "text-red-400")}>
+                    Unit Price ($) *
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
+                    <Input 
+                      id="price" 
+                      type="number" 
+                      step="0.01" 
+                      value={price} 
+                      onChange={(e) => setPrice(e.target.value)} 
+                      placeholder="0.00" 
+                      className={cn("pl-9 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] focus:ring-[#c5a059]", errors.price && "border-red-500")} 
+                    />
                   </div>
-                  {errors.price && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={14} className="mr-1"/>{errors.price}</p>}
+                  {errors.price && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={13} className="mr-1"/>{errors.price}</p>}
                 </div>
+
                 <div>
-                  <Label htmlFor="quantity" className={cn("text-gray-300", errors.quantity && "text-red-400")}>Quantity in Stock*</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input id="quantity" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" className={cn("pl-8 bg-slate-700 border-slate-600", errors.quantity && "border-red-500")} />
+                  <Label htmlFor="quantity" className={cn("text-xs uppercase tracking-wider font-medium text-[#c5a059]", errors.quantity && "text-red-400")}>
+                    Initial Stock Quantity *
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#c5a059]" />
+                    <Input 
+                      id="quantity" 
+                      type="number" 
+                      value={quantity} 
+                      onChange={(e) => setQuantity(e.target.value)} 
+                      placeholder="0" 
+                      className={cn("pl-9 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] focus:ring-[#c5a059]", errors.quantity && "border-red-500")} 
+                    />
                   </div>
-                  {errors.quantity && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={14} className="mr-1"/>{errors.quantity}</p>}
+                  {errors.quantity && <p className="text-xs text-red-400 mt-1 flex items-center"><AlertCircle size={13} className="mr-1"/>{errors.quantity}</p>}
                 </div>
+
                 <div>
-                  <Label htmlFor="supplier" className="text-gray-300">Supplier (Optional)</Label>
-                  <Input id="supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="e.g., Tech Supplies Inc." className="bg-slate-700 border-slate-600" />
+                  <Label htmlFor="supplier" className="text-xs uppercase tracking-wider font-medium text-[#9ea8a1]">
+                    Supplier (Optional)
+                  </Label>
+                  <div className="mt-1.5">
+                    <Select value={supplier} onValueChange={setSupplier}>
+                      <SelectTrigger className="w-full bg-[#141f18] border-[#2c3d32] text-[#f4efe6]">
+                        <SelectValue placeholder="Select primary vendor" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#111914] border-[#36493e] text-[#f4efe6]">
+                        {suppliers.map(sup => (
+                          <SelectItem key={sup.value} value={sup.value}>
+                            {sup.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                 <div>
-                  <Label htmlFor="productImage" className="text-gray-300">Product Image</Label>
-                  <Input id="productImage" type="file" onChange={handleImageChange} accept="image/*" className="bg-slate-700 border-slate-600 file:text-sky-400 file:font-medium hover:file:bg-sky-700/20" />
+
+                <div>
+                  <Label htmlFor="productImage" className="text-xs uppercase tracking-wider font-medium text-[#9ea8a1]">
+                    Product Photo (Optional)
+                  </Label>
+                  <Input 
+                    id="productImage" 
+                    type="file" 
+                    onChange={handleImageChange} 
+                    accept="image/*" 
+                    className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] file:text-[#c5a059] file:bg-[#1e2e24] file:border-0 file:rounded-md file:mr-3 file:py-1 file:px-3 file:text-xs" 
+                  />
                   {imagePreview && (
-                    <div className="mt-2">
-                      <img src={imagePreview} alt="Product Preview" className="h-32 w-32 object-cover rounded-md border border-slate-600" />
+                    <div className="mt-3 flex items-center gap-3 p-2 rounded-lg bg-[#111a14] border border-[#2e4034]">
+                      <img src={imagePreview} alt="Preview" className="h-16 w-16 object-cover rounded-md border border-[#c5a059]/40" />
+                      <span className="text-xs text-[#9ea8a1]">Image attached</span>
                     </div>
                   )}
                 </div>
@@ -321,16 +314,34 @@ const AddProductPage = () => {
             </div>
 
             <div>
-              <Label htmlFor="description" className="text-gray-300">Description (Optional)</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detailed product description..." className="bg-slate-700 border-slate-600 min-h-[100px]" />
+              <Label htmlFor="description" className="text-xs uppercase tracking-wider font-medium text-[#9ea8a1]">
+                Description & Specifications
+              </Label>
+              <Textarea 
+                id="description" 
+                value={description} 
+                onChange={(e) => setDescription(e.target.value)} 
+                placeholder="Comprehensive details and notes about the item..." 
+                className="mt-1.5 bg-[#141f18] border-[#2c3d32] text-[#f4efe6] focus:border-[#c5a059] min-h-[90px]" 
+              />
             </div>
           </CardContent>
-          <CardFooter className="flex justify-end space-x-3 pt-6 border-t border-slate-700">
-            <Button type="button" variant="outline" onClick={() => navigate('/products')} className="text-gray-300 border-slate-600 hover:bg-slate-700">
+
+          <CardFooter className="flex justify-end space-x-3 p-6 border-t border-[#25352c] bg-[#0f1712]/50">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => navigate('/products')} 
+              className="text-[#9ea8a1] border-[#2c3d32] hover:bg-[#18241d] hover:text-[#f4efe6]"
+            >
               Cancel
             </Button>
-            <Button type="submit" className="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-md">
-              <PackagePlus className="mr-2 h-5 w-5" /> Add Product
+            <Button 
+              type="submit" 
+              disabled={isSubmitting} 
+              className="old-money-gold-btn px-6 py-2"
+            >
+              <PackagePlus className="mr-2 h-4 w-4" /> {isSubmitting ? 'Saving to Database...' : 'Save Product'}
             </Button>
           </CardFooter>
         </form>
@@ -340,4 +351,3 @@ const AddProductPage = () => {
 };
 
 export default AddProductPage;
-  

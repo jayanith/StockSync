@@ -1,150 +1,154 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
-import { Building, ArrowLeft, MapPin, Package, Search, Layers } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+import { Building, ArrowLeft, MapPin, User, Mail, Phone, Package, ArrowRightLeft } from 'lucide-react';
+import { getWarehouse, getWarehouseInventory } from '@/lib/api';
 
 const WarehouseDetailsPage = () => {
   const { warehouseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [warehouse, setWarehouse] = useState(null);
-  const [stockItems, setStockItems] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    setIsLoading(true);
-    const allWarehouses = JSON.parse(localStorage.getItem('inventoryWarehouses')) || [];
-    const foundWarehouse = allWarehouses.find(wh => wh.id === warehouseId);
-    const warehouseIndex = allWarehouses.findIndex(wh => wh.id === warehouseId);
-
-
-    if (foundWarehouse) {
-      setWarehouse(foundWarehouse);
-      const allProducts = JSON.parse(localStorage.getItem('inventoryProducts')) || [];
-      const warehouseProducts = allProducts
-        .filter((p, productIndex) => productIndex % (allWarehouses.length || 1) === warehouseIndex) 
-        .map((p, productIndex) => ({ ...p, quantityInWarehouse: Math.floor(p.quantity / (allWarehouses.length || 1)) + (productIndex % 3) }));
-      setStockItems(warehouseProducts);
-    } else {
-      toast({ title: "Error", description: "Warehouse not found.", variant: "destructive" });
-      navigate('/inventory/warehouses');
-    }
-    setIsLoading(false);
-  }, [warehouseId, navigate, toast]);
-  
-  const filteredStockItems = stockItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const wRes = await getWarehouse(warehouseId);
+        if (wRes && wRes.data) {
+          setWarehouse(wRes.data);
+        }
+        const invRes = await getWarehouseInventory(warehouseId);
+        if (invRes && invRes.data) {
+          setInventory(invRes.data);
+        }
+      } catch (e) {
+        console.error('Error fetching warehouse details:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [warehouseId]);
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen"><Building className="h-12 w-12 animate-spin text-sky-500" /></div>;
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Building className="h-10 w-10 animate-spin text-[#c5a059]" />
+      </div>
+    );
   }
 
   if (!warehouse) {
-    return <div className="text-center py-10 text-red-500">Warehouse not found.</div>;
+    return (
+      <div className="text-center py-20 old-money-card border-[#2e4034] rounded-xl max-w-lg mx-auto">
+        <h2 className="text-xl font-serif text-[#f8f6f0] mb-3">Facility Not Found</h2>
+        <Button onClick={() => navigate('/inventory/warehouses')} className="old-money-gold-btn text-xs uppercase tracking-wider">
+          Return to Warehouses
+        </Button>
+      </div>
+    );
   }
-
-  const totalStockInWarehouse = stockItems.reduce((sum, item) => sum + item.quantityInWarehouse, 0);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-8"
+      transition={{ duration: 0.4 }}
+      className="max-w-5xl mx-auto space-y-6"
     >
-      <Button variant="outline" onClick={() => navigate('/inventory/warehouses')} className="mb-6 text-sky-400 border-sky-500 hover:bg-sky-500/10">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Warehouses
-      </Button>
+      <div className="flex justify-between items-center">
+        <Button 
+          variant="outline" 
+          onClick={() => navigate('/inventory/warehouses')} 
+          className="text-[#c5a059] border-[#3a4d41] hover:bg-[#1f2e25] hover:text-[#f8f6f0]"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Warehouses
+        </Button>
+        <Link to="/inventory/transfers">
+          <Button className="old-money-gold-btn text-xs uppercase tracking-wider py-2 px-4">
+            <ArrowRightLeft className="mr-2 h-4 w-4" /> Transfer Stock Between Vaults
+          </Button>
+        </Link>
+      </div>
 
-      <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-        <CardHeader className="border-b border-slate-700 pb-4">
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-            {warehouse.name}
-          </CardTitle>
-          <CardDescription className="text-gray-400 flex items-center mt-1">
-            <MapPin className="mr-2 h-4 w-4" /> {warehouse.location}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
-            <Card className="md:col-span-1 bg-slate-700/50 border-slate-600 p-4">
-                <h3 className="text-lg font-semibold text-sky-300 mb-2">Warehouse Stats</h3>
-                <p className="text-sm text-gray-300">Capacity: <span className="font-bold text-white">{warehouse.capacity.toLocaleString()} units</span></p>
-                <p className="text-sm text-gray-300">Total Items: <span className="font-bold text-white">{totalStockInWarehouse.toLocaleString()}</span></p>
-                <p className="text-sm text-gray-300 mb-1">Utilization:</p>
-                <Progress value={(totalStockInWarehouse / warehouse.capacity) * 100} className="h-3 [&>*]:bg-sky-500" />
-            </Card>
-            <div className="md:col-span-2">
-                 <Input 
-                    type="text"
-                    placeholder="Search products in this warehouse..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 focus:border-sky-500 text-white w-full mb-4"
-                />
-                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 sr-only" /> {/* Icon for visual consistency, hidden if input has own */}
-            </div>
-        </CardContent>
-      </Card>
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+            <CardHeader className="border-b border-[#202f25] p-6 bg-[#0f1712]/70">
+              <span className="text-xs uppercase tracking-widest text-[#c5a059] font-medium">Depository Facility</span>
+              <CardTitle className="text-2xl font-serif text-[#f8f6f0] mt-1">{warehouse.name}</CardTitle>
+              <CardDescription className="text-xs text-[#9ea8a1]">Location: {warehouse.location}</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-xs text-[#d8d3c5]">
+              <div className="grid sm:grid-cols-2 gap-4">
+                {warehouse.address && (
+                  <p className="flex items-center"><MapPin className="h-4 w-4 mr-2 text-[#c5a059]" /> {warehouse.address}</p>
+                )}
+                {warehouse.manager && (
+                  <p className="flex items-center"><User className="h-4 w-4 mr-2 text-[#c5a059]" /> Manager: {warehouse.manager}</p>
+                )}
+                {warehouse.phone && (
+                  <p className="flex items-center"><Phone className="h-4 w-4 mr-2 text-[#c5a059]" /> {warehouse.phone}</p>
+                )}
+                {warehouse.email && (
+                  <p className="flex items-center"><Mail className="h-4 w-4 mr-2 text-[#c5a059]" /> {warehouse.email}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card className="bg-slate-800/70 border-slate-700 shadow-xl">
-        <CardHeader>
-            <CardTitle className="text-xl text-sky-300">Stock in {warehouse.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-        {filteredStockItems.length > 0 ? (
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-300">
-                <thead className="text-xs text-gray-400 uppercase bg-slate-700/50">
-                <tr>
-                    <th scope="col" className="px-6 py-3">Product Name</th>
-                    <th scope="col" className="px-6 py-3">SKU</th>
-                    <th scope="col" className="px-6 py-3">Category</th>
-                    <th scope="col" className="px-6 py-3 text-center">Quantity in Warehouse</th>
-                    <th scope="col" className="px-6 py-3 text-center">Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                {filteredStockItems.map((item, index) => (
-                    <motion.tr
-                    key={item.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="border-b border-slate-700 hover:bg-slate-700/30"
-                    >
-                    <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{item.name}</td>
-                    <td className="px-6 py-4">{item.sku}</td>
-                    <td className="px-6 py-4">{item.category}</td>
-                    <td className="px-6 py-4 text-center">{item.quantityInWarehouse}</td>
-                    <td className="px-6 py-4 text-center">
-                        <Link to={`/products/${item.id}`}>
-                        <Button variant="ghost" size="sm" className="text-sky-400 hover:text-sky-300 hover:bg-sky-900/30">
-                            <Package className="mr-1 h-4 w-4" /> View Product
-                        </Button>
-                        </Link>
-                    </td>
-                    </motion.tr>
-                ))}
-                </tbody>
-            </table>
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl">
+            <CardHeader className="border-b border-[#202f25] p-5 bg-[#0f1712]/70">
+              <CardTitle className="text-base font-serif text-[#f8f6f0] flex items-center">
+                <Package className="mr-2 h-4 w-4 text-[#c5a059]" /> Vault Inventory Allocation
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              {inventory.length > 0 ? (
+                <div className="divide-y divide-[#1e2c22]">
+                  {inventory.map((inv, idx) => (
+                    <div key={idx} className="py-3 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-medium text-[#f8f6f0]">{inv.product?.name || 'Stock Item'}</span>
+                        <p className="text-[10px] text-[#718277]">SKU: {inv.product?.sku}</p>
+                      </div>
+                      <span className="font-mono text-[#6ee7b7] font-semibold px-2.5 py-0.5 rounded bg-[#16291f] border border-[#234734]">
+                        {inv.quantity} units stored
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#9ea8a1] py-4 text-center">No inventory allocations recorded for this facility.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="md:col-span-1">
+          <Card className="old-money-card border-[#2e4034] rounded-xl shadow-xl p-5 space-y-4 text-xs text-[#d8d3c5]">
+            <h4 className="font-serif font-semibold text-base text-[#f8f6f0]">Storage Capacity</h4>
+            <div>
+              <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Total Max Storage</span>
+              <span className="text-lg font-serif font-bold text-[#c5a059]">{warehouse.capacity || 5000} units</span>
             </div>
-        ) : (
-            <p className="text-center text-gray-400 py-8">No products found in this warehouse {searchTerm && 'matching your search'}.</p>
-        )}
-        </CardContent>
-      </Card>
+            <div>
+              <span className="text-[#9ea8a1] block text-[10px] uppercase tracking-wider">Facility Status</span>
+              <span className="inline-block mt-1 px-2.5 py-0.5 rounded bg-[#173022] text-[#6ee7b7] border border-[#225039] font-medium text-[11px]">
+                {warehouse.status || 'Active Operation'}
+              </span>
+            </div>
+          </Card>
+        </div>
+      </div>
     </motion.div>
   );
 };
 
 export default WarehouseDetailsPage;
-  
