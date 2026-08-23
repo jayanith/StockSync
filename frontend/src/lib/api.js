@@ -1,9 +1,106 @@
 // API utility functions for the inventory management system
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'demo';
+const DEMO_MODE = API_URL === 'demo' || API_URL === 'browser';
+
+const demoSeed = {
+  users: [
+    { id: 1, name: 'Alexander Sterling', email: 'admin@example.com', password: 'admin123', role: 'Admin', status: 'Active' },
+    { id: 2, name: 'Victoria Windsor', email: 'manager@example.com', password: 'manager123', role: 'Manager', status: 'Active' },
+    { id: 3, name: 'Arthur Pendelton', email: 'staff@example.com', password: 'staff123', role: 'Warehouse Staff', status: 'Active' },
+    { id: 4, name: 'Henri de Montmollin', email: 'supplier@example.com', password: 'supplier123', role: 'Supplier', status: 'Active' }
+  ],
+  categories: [
+    { id: 1, name: 'Fine Watches & Timepieces', description: 'Haute horlogerie and chronographs' },
+    { id: 2, name: 'Leather Goods & Luggage', description: 'Handcrafted Italian leather accessories' },
+    { id: 3, name: 'Heritage Tailoring & Apparel', description: 'Cashmere, tweed and formal evening wear' }
+  ],
+  products: [
+    { id: 1, name: 'Royal Oak Chronograph 18k Rose Gold', sku: 'RO-CHRONO-RG01', price: 42500, quantity: 8, category: { id: 1, name: 'Fine Watches & Timepieces' }, isActive: true },
+    { id: 2, name: 'Double-Breasted Cashmere Overcoat', sku: 'SR-COAT-CSH02', price: 3850, quantity: 15, category: { id: 3, name: 'Heritage Tailoring & Apparel' }, isActive: true },
+    { id: 3, name: 'Chesterfield Deep-Tufted Leather Armchair', sku: 'CH-LEATH-ARM03', price: 2900, quantity: 12, category: { id: 2, name: 'Leather Goods & Luggage' }, isActive: true }
+  ],
+  suppliers: [
+    { id: 1, name: 'Geneva Horological Guild', contactPerson: 'Henri de Montmollin', email: 'supplier@example.com', productsSupplied: 4 },
+    { id: 2, name: 'Savile Row Clothiers', contactPerson: 'Charles Beauchamp', email: 'bespoke@savilerow.co.uk', productsSupplied: 6 }
+  ],
+  warehouses: [
+    { id: 1, name: 'Mayfair Vault & Depository', location: 'London, Mayfair', capacity: 5000, status: 'Active' },
+    { id: 2, name: 'Edinburgh Highland Depot', location: 'Edinburgh, Scotland', capacity: 8000, status: 'Active' }
+  ],
+  orders: [],
+  'purchase-orders': [],
+  deliveries: []
+};
+
+const readDemoData = () => {
+  const stored = localStorage.getItem('stocksync-demo-data');
+  if (stored) return JSON.parse(stored);
+  localStorage.setItem('stocksync-demo-data', JSON.stringify(demoSeed));
+  return JSON.parse(JSON.stringify(demoSeed));
+};
+
+const writeDemoData = (data) => localStorage.setItem('stocksync-demo-data', JSON.stringify(data));
+
+const demoFetch = async (endpoint, options = {}) => {
+  const data = readDemoData();
+  const method = options.method || 'GET';
+  const body = options.body ? JSON.parse(options.body) : {};
+
+  if (endpoint === '/auth/login' && method === 'POST') {
+    const user = data.users.find((candidate) => candidate.email === body.email && candidate.password === body.password);
+    if (!user) throw new Error('Invalid email or password');
+    const { password, ...safeUser } = user;
+    return { token: `demo-token-${user.id}`, user: safeUser };
+  }
+
+  if (endpoint === '/auth/register' && method === 'POST') {
+    const user = { id: Date.now(), ...body, role: body.role || 'Staff', status: 'Active' };
+    data.users.push(user);
+    writeDemoData(data);
+    const { password, ...safeUser } = user;
+    return { token: `demo-token-${user.id}`, user: safeUser };
+  }
+
+  if (endpoint === '/auth/me') {
+    const id = Number((localStorage.getItem('authToken') || '').replace('demo-token-', ''));
+    const user = data.users.find((candidate) => candidate.id === id);
+    if (!user) throw new Error('401 Unauthorized');
+    const { password, ...safeUser } = user;
+    return { user: safeUser };
+  }
+
+  const match = endpoint.match(/^\/(products|categories|suppliers|warehouses|orders|purchase-orders|deliveries|users)(?:\/(\d+))?/);
+  if (!match) return {};
+  const [, resource, id] = match;
+  const collection = data[resource] || [];
+  if (method === 'GET' && !id) return collection;
+  if (method === 'GET' && id) return collection.find((item) => item.id === Number(id)) || {};
+  if (method === 'POST') {
+    const item = { id: Date.now(), ...body };
+    collection.push(item);
+    data[resource] = collection;
+    writeDemoData(data);
+    return item;
+  }
+  if ((method === 'PUT' || method === 'PATCH') && id) {
+    const index = collection.findIndex((item) => item.id === Number(id));
+    if (index >= 0) collection[index] = { ...collection[index], ...body };
+    writeDemoData(data);
+    return collection[index] || {};
+  }
+  if (method === 'DELETE' && id) {
+    data[resource] = collection.filter((item) => item.id !== Number(id));
+    writeDemoData(data);
+    return { message: 'Deleted successfully' };
+  }
+  return {};
+};
 
 // Helper function to handle fetch requests
 const fetchData = async (endpoint, options = {}) => {
+  if (DEMO_MODE) return demoFetch(endpoint, options);
+
   // Get token from localStorage
   const token = localStorage.getItem('authToken');
   
