@@ -8,7 +8,8 @@ const demoSeed = {
     { id: 1, name: 'Alexander Sterling', email: 'admin@example.com', password: 'admin123', role: 'Admin', status: 'Active' },
     { id: 2, name: 'Victoria Windsor', email: 'manager@example.com', password: 'manager123', role: 'Manager', status: 'Active' },
     { id: 3, name: 'Arthur Pendelton', email: 'staff@example.com', password: 'staff123', role: 'Warehouse Staff', status: 'Active' },
-    { id: 4, name: 'Henri de Montmollin', email: 'supplier@example.com', password: 'supplier123', role: 'Supplier', status: 'Active' }
+    { id: 4, name: 'Henri de Montmollin', email: 'supplier@example.com', password: 'supplier123', role: 'Supplier', status: 'Active' },
+    { id: 5, name: 'Catherine Client', email: 'customer@example.com', password: 'customer123', role: 'Customer', status: 'Active' }
   ],
   categories: [
     { id: 1, name: 'Fine Watches & Timepieces', description: 'Haute horlogerie and chronographs' },
@@ -35,7 +36,16 @@ const demoSeed = {
 
 const readDemoData = () => {
   const stored = localStorage.getItem('stocksync-demo-data');
-  if (stored) return JSON.parse(stored);
+  if (stored) {
+    const data = JSON.parse(stored);
+    const existingEmails = new Set((data.users || []).map((user) => user.email));
+    const missingUsers = demoSeed.users.filter((user) => !existingEmails.has(user.email));
+    if (missingUsers.length > 0) {
+      data.users = [...(data.users || []), ...missingUsers];
+      writeDemoData(data);
+    }
+    return data;
+  }
   localStorage.setItem('stocksync-demo-data', JSON.stringify(demoSeed));
   return JSON.parse(JSON.stringify(demoSeed));
 };
