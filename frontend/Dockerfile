@@ -4,12 +4,12 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm ci
 
 COPY . .
 
-# Update the API URL to point to the backend container
-RUN sed -i 's|http://localhost:5000/api|/api|g' src/lib/api.js
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 

@@ -3,6 +3,7 @@ package com.inventory.config;
 import com.inventory.model.*;
 import com.inventory.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -44,6 +45,18 @@ public class DataInitializer implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+        @Value("${seed.admin-password}")
+        private String adminPassword;
+
+        @Value("${seed.manager-password}")
+        private String managerPassword;
+
+        @Value("${seed.staff-password}")
+        private String staffPassword;
+
+        @Value("${seed.supplier-password}")
+        private String supplierPassword;
+
     @Override
     public void run(String... args) throws Exception {
         // 1. Seed Users with explicit enterprise roles (Admin, Manager, Warehouse Staff, Supplier)
@@ -51,48 +64,48 @@ public class DataInitializer implements CommandLineRunner {
             User admin = User.builder()
                     .name("Alexander Sterling")
                     .email("admin@example.com")
-                    .password(passwordEncoder.encode("admin123"))
+                    .password(passwordEncoder.encode(adminPassword))
                     .role("Admin")
                     .status("Active")
                     .build();
             userRepository.save(admin);
-            System.out.println(">>> Seeded Admin User: admin@example.com / admin123 (Role: Admin)");
+            System.out.println(">>> Seeded Admin User: admin@example.com (Role: Admin)");
         }
 
         if (!userRepository.existsByEmail("manager@example.com")) {
             User manager = User.builder()
                     .name("Victoria Windsor")
                     .email("manager@example.com")
-                    .password(passwordEncoder.encode("manager123"))
+                    .password(passwordEncoder.encode(managerPassword))
                     .role("Manager")
                     .status("Active")
                     .build();
             userRepository.save(manager);
-            System.out.println(">>> Seeded Manager User: manager@example.com / manager123 (Role: Manager)");
+            System.out.println(">>> Seeded Manager User: manager@example.com (Role: Manager)");
         }
 
         if (!userRepository.existsByEmail("staff@example.com")) {
             User staff = User.builder()
                     .name("Arthur Pendelton")
                     .email("staff@example.com")
-                    .password(passwordEncoder.encode("staff123"))
+                    .password(passwordEncoder.encode(staffPassword))
                     .role("Warehouse Staff")
                     .status("Active")
                     .build();
             userRepository.save(staff);
-            System.out.println(">>> Seeded Warehouse Staff: staff@example.com / staff123 (Role: Warehouse Staff)");
+            System.out.println(">>> Seeded Warehouse Staff: staff@example.com (Role: Warehouse Staff)");
         }
 
         if (!userRepository.existsByEmail("supplier@example.com")) {
             User supplierUser = User.builder()
                     .name("Henri de Montmollin")
                     .email("supplier@example.com")
-                    .password(passwordEncoder.encode("supplier123"))
+                    .password(passwordEncoder.encode(supplierPassword))
                     .role("Supplier")
                     .status("Active")
                     .build();
             userRepository.save(supplierUser);
-            System.out.println(">>> Seeded Supplier User: supplier@example.com / supplier123 (Role: Supplier)");
+            System.out.println(">>> Seeded Supplier User: supplier@example.com (Role: Supplier)");
         }
 
         // 2. Seed Categories
