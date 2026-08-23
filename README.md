@@ -6,7 +6,7 @@ It is designed to demonstrate a modern React dashboard backed by a Java Spring B
 
 ## Highlights
 
-- Role-aware dashboard for Admin, Manager, Warehouse Staff, Supplier, and Customer users
+- Role-aware dashboard for Admin, Manager, Warehouse Staff, and Supplier users
 - Product catalog, categories, suppliers, warehouses, stock transfers, orders, purchasing, and deliveries
 - React 18, Vite, Tailwind CSS, Radix UI, Lucide icons, and Framer Motion
 - Spring Boot 3.2, Spring Data JPA, MySQL, Spring Security, and JJWT
@@ -14,6 +14,40 @@ It is designed to demonstrate a modern React dashboard backed by a Java Spring B
 - BCrypt password hashing on the Java backend
 - CORS configuration through environment variables
 - Dockerfiles for frontend and backend deployment
+
+## Product Scope
+
+StockSync is intended for a multi-location retailer, distributor, or luxury-goods operator that needs one controlled view of stock movement from supplier purchase through warehouse receipt and customer fulfillment.
+
+### Core Business Use Cases
+
+| Workflow | Business outcome |
+| --- | --- |
+| Catalog governance | Managers maintain a single product, SKU, pricing, category, and supplier record. |
+| Procurement | Teams create and approve purchase orders, then track expected receipts. |
+| Warehouse operations | Staff verify stock, monitor capacity, and authorize transfers between locations. |
+| Order fulfillment | Commercial teams manage customer orders and delivery status from one ledger. |
+| Supplier collaboration | External suppliers see assigned procurement and delivery work without internal administration access. |
+| Operational reporting | Leaders review valuation, stock movement, supplier performance, and order summaries. |
+| Access governance | Administrators provision roles and restrict sensitive workflows with role-based access control. |
+
+### Operating Model
+
+The database is an infrastructure dependency configured once by the deployment owner. Business users do not create databases. Administrators create and manage application users from the User Accounts area; end users authenticate through the login screen and work only within their permitted role scope.
+
+## Roadmap
+
+The current release establishes the core catalog, procurement, warehouse, delivery, reporting, and JWT security foundation. Planned product evolution includes:
+
+- Audit event history for every stock, order, approval, and permission change
+- Approval policies with configurable thresholds for purchase orders and stock transfers
+- Barcode and QR scanning for receiving, picking, and cycle counts
+- Low-stock alerts, replenishment suggestions, and scheduled notifications
+- Immutable inventory ledger with reservation and reconciliation workflows
+- Supplier and customer self-service portals with scoped tenant data
+- File attachments for invoices, delivery notes, and product documentation
+- Automated API, integration, security, and end-to-end test coverage in CI
+- Observability with structured logs, health checks, metrics, and deployment alerts
 
 ## Architecture
 
@@ -67,7 +101,7 @@ The frontend centralizes requests in `frontend/src/lib/api.js`. The backend expo
 
 ### Database
 
-Create the database:
+Create the database once as part of local infrastructure setup:
 
 ```sql
 CREATE DATABASE inventory_db;
@@ -112,7 +146,7 @@ SEED_STAFF_PASSWORD=<staff-password>
 SEED_SUPPLIER_PASSWORD=<supplier-password>
 ```
 
-The backend hashes user passwords with BCrypt before storing them. Generate unique values for every environment and store them in the hosting provider's secret manager.
+The backend hashes user passwords with BCrypt before storing them. Generate unique values for every environment and store them in the hosting provider's secret manager. The seed variables are deployment bootstrap secrets, not passwords to publish or share in the product documentation.
 
 ## Authentication and Security
 
@@ -127,7 +161,7 @@ The full-stack backend uses a stateless JWT flow:
 
 JWT expiration is configured by `jwt.expiration` and defaults to 86,400,000 milliseconds, or 24 hours. CORS origins are controlled by `APP_CORS_ALLOWED_ORIGINS`.
 
-For production, use a long randomly generated secret, HTTPS, non-default seed passwords, a managed MySQL database, and a real user-management policy. The browser demo mode should be used only for showcasing the UI.
+For production, use a long randomly generated secret, HTTPS, a managed MySQL database, and a real user-management policy. Never publish seed credentials or use development values in a deployed environment.
 
 ## API Areas
 
@@ -187,4 +221,4 @@ Do not commit `.env` files, database credentials, JWT secrets, or account passwo
 
 ## License
 
-This project is a portfolio and interview demonstration application.
+This project is a reference implementation of an enterprise inventory and supply-chain platform.
