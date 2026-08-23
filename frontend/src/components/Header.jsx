@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Package2, UserCircle, LogOut, Shield } from 'lucide-react';
+import { BarChart3, UserCircle, LogOut, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -40,11 +40,11 @@ const Header = ({ onLogout }) => {
       <div className="container mx-auto px-4 md:px-6 flex justify-between items-center w-full">
         <Link to="/" className="flex items-center space-x-3 group">
           <div className="p-2 rounded-lg bg-[#161c18] border border-[#2c3730] text-[#c5a059]">
-            <Package2 className="h-5 w-5" />
+            <BarChart3 className="h-5 w-5" />
           </div>
           <div>
             <span className="text-base font-serif font-bold tracking-wide text-[#f4f1ea]">
-              INVENTORY<span className="text-[#c5a059] ml-1.5 font-sans text-xs font-semibold uppercase tracking-widest">Enterprise</span>
+              Stock<span className="text-[#c5a059]">Sync</span>
             </span>
           </div>
         </Link>
